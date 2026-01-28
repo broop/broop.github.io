@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Note & Triad Player</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        body {
+            margin: 24px;
+            background: #f6f7f9;
+            color: #111;
+        }
+
+        .card {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 20px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .row + .row {
+            margin-top: 14px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        select {
+            font-size: 14px;
+            padding: 8px 12px;
+            border: 1px solid #cfd6e4;
+            border-radius: 10px;
+            min-width: 100px;
+        }
+
+        select:focus-visible {
+            outline: 2px solid #4a7aed;
+            outline-offset: 1px;
+        }
+
+        button {
+            font-size: 14px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid #cfd6e4;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #f0f3f8;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .play-btn {
+            background: #4a7aed;
+            color: #fff;
+            border-color: #4a7aed;
+            min-width: 100px;
+        }
+
+        .play-btn:hover:not(:disabled) {
+            background: #3a66d4;
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #555;
+            min-height: 20px;
+        }
+
+        .notes-display {
+            margin-top: 14px;
+            padding: 14px;
+            background: #fafbfc;
+            border: 1px solid #e5e9f2;
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        #keyboard {
+            margin-top: 18px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e5e9f2;
+        }
+
+        .keyboard-label {
+            margin-top: 18px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .current-note {
+            margin-bottom: 8px;
+            padding: 10px 14px;
+            background: #fafbfc;
+            border: 1px solid #e5e9f2;
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 24px;
+            text-align: center;
+            min-height: 30px;
+        }
+
+        .chord-section {
+            margin-top: 18px;
+            padding: 14px;
+            background: #fafbfc;
+            border: 1px solid #e5e9f2;
+            border-radius: 10px;
+        }
+
+        .chord-section h2 {
+            margin: 0 0 12px;
+            font-size: 16px;
+        }
+
+        .chord-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border: 1px solid #cfd6e4;
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+        }
+
+        .chord-input:focus {
+            outline: 2px solid #4a7aed;
+            outline-offset: 1px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Note & Triad Player</h1>
+
+    <div class="row">
+        <label>
+            Key
+            <select id="keySelect">
+                <option value="C">C</option>
+                <option value="C#">C# / Db</option>
+                <option value="D">D</option>
+                <option value="D#">D# / Eb</option>
+                <option value="E">E</option>
+                <option value="F">F</option>
+                <option value="F#">F# / Gb</option>
+                <option value="G">G</option>
+                <option value="G#">G# / Ab</option>
+                <option value="A">A</option>
+                <option value="A#">A# / Bb</option>
+                <option value="B">B</option>
+            </select>
+        </label>
+
+        <label>
+            Octave
+            <select id="octaveSelect">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+            </select>
+        </label>
+
+        <label>
+            Type
+            <select id="typeSelect">
+                <option value="single">Single Note</option>
+                <option value="major">Major Triad</option>
+                <option value="minor">Minor Triad</option>
+                <option value="diminished">Diminished Triad</option>
+                <option value="augmented">Augmented Triad</option>
+            </select>
+        </label>
+
+        <label>
+            Duration (sec)
+            <input id="durationInput" type="number" min="0.1" max="10" step="0.1" value="2" style="width: 80px;"/>
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Loading...</button>
+        <button id="stopBtn">Stop</button>
+    </div>
+
+    <div id="notesDisplay" class="notes-display">-</div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Triads: Major (1-3-5), Minor (1-b3-5), Diminished (1-b3-b5), Augmented (1-3-#5)
+    </div>
+
+    <div class="chord-section">
+        <h2>Custom Chord</h2>
+        <div class="row">
+            <input type="text" id="chordInput" class="chord-input" placeholder="e.g. C4 E4 G#4" />
+            <button id="playChordBtn" class="play-btn">Play</button>
+            <button id="clearChordBtn">Clear</button>
+        </div>
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="currentNote" class="current-note">-</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+
+<script>
+    (function () {
+        const keySelect = document.getElementById("keySelect");
+        const octaveSelect = document.getElementById("octaveSelect");
+        const typeSelect = document.getElementById("typeSelect");
+        const durationInput = document.getElementById("durationInput");
+        const playBtn = document.getElementById("playBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const notesDisplay = document.getElementById("notesDisplay");
+        const statusDiv = document.getElementById("status");
+        const currentNoteDiv = document.getElementById("currentNote");
+        const chordInput = document.getElementById("chordInput");
+        const playChordBtn = document.getElementById("playChordBtn");
+        const clearChordBtn = document.getElementById("clearChordBtn");
+
+        // Audio context and instrument
+        let audioCtx = null;
+        let piano = null;
+        let currentNodes = [];
+        let keyboardNodes = {}; // Track notes played via keyboard (for sustain)
+
+        // Map of note names to key elements for highlighting
+        let keyElements = {};
+
+        // Note name to semitone offset from C
+        const NOTE_TO_SEMITONE = {
+            "C": 0, "C#": 1, "Db": 1,
+            "D": 2, "D#": 3, "Eb": 3,
+            "E": 4,
+            "F": 5, "F#": 6, "Gb": 6,
+            "G": 7, "G#": 8, "Ab": 8,
+            "A": 9, "A#": 10, "Bb": 10,
+            "B": 11
+        };
+
+        // Semitone to note name (using sharps)
+        const SEMITONE_TO_NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+        // Triad intervals in semitones from root
+        const TRIAD_INTERVALS = {
+            single: [0],
+            major: [0, 4, 7],        // root, major 3rd, perfect 5th
+            minor: [0, 3, 7],        // root, minor 3rd, perfect 5th
+            diminished: [0, 3, 6],   // root, minor 3rd, diminished 5th
+            augmented: [0, 4, 8]     // root, major 3rd, augmented 5th
+        };
+
+        function setStatus(msg) {
+            statusDiv.textContent = msg;
+        }
+
+        function parseChordInput() {
+            const input = chordInput.value.trim();
+            if (!input) return [];
+
+            // Parse space-separated notes, normalize format
+            return input.split(/\s+/)
+                .map(note => {
+                    // Match note like C4, c#4, Gb3, etc.
+                    const match = note.match(/^([A-Ga-g])([#b]?)(\d+)$/);
+                    if (!match) return null;
+                    const letter = match[1].toUpperCase();
+                    const accidental = match[2] === 'b' ? 'b' : (match[2] === '#' ? '#' : '');
+                    const octave = match[3];
+                    return letter + accidental + octave;
+                })
+                .filter(n => n !== null);
+        }
+
+        function playChord() {
+            if (!piano) {
+                setStatus("Piano not loaded yet.");
+                return;
+            }
+
+            const notes = parseChordInput();
+            if (notes.length === 0) {
+                setStatus("Enter notes like: C4 E4 G#4");
+                return;
+            }
+
+            stopAll();
+
+            const duration = parseFloat(durationInput.value) || 2;
+            const durationMs = duration * 1000;
+
+            notes.forEach(note => {
+                const node = piano.play(note, audioCtx.currentTime, {duration: duration});
+                if (node) currentNodes.push(node);
+                highlightKey(note, durationMs);
+            });
+
+            setStatus("Playing: " + notes.join(" "));
+        }
+
+        function clearChord() {
+            chordInput.value = "";
+            setStatus("Cleared.");
+        }
+
+        function highlightKey(note, durationMs) {
+            // Convert flats to sharps for lookup (e.g., Gb4 -> F#4)
+            let lookupNote = note;
+            if (note.includes("b")) {
+                const match = note.match(/^([A-G])b(\d+)$/);
+                if (match) {
+                    const flatToSharp = {
+                        "Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"
+                    };
+                    const converted = flatToSharp[match[1] + "b"];
+                    if (converted) {
+                        lookupNote = converted + match[2];
+                    }
+                }
+            }
+
+            const keyEl = keyElements[lookupNote];
+            if (!keyEl) return;
+
+            const isBlack = lookupNote.includes("#");
+            keyEl.style.backgroundColor = "#4a7aed";
+
+            setTimeout(() => {
+                keyEl.style.backgroundColor = isBlack ? "#333333" : "#ffffff";
+            }, durationMs);
+        }
+
+        function buildKeyMap() {
+            const keyboardEl = document.getElementById("keyboard");
+            const allKeys = Array.from(keyboardEl.querySelectorAll("li"));
+
+            // Separate and sort white/black keys by position
+            const whiteKeys = allKeys.filter(k => k.style.position !== "absolute")
+                .sort((a, b) => a.offsetLeft - b.offsetLeft);
+            const blackKeys = allKeys.filter(k => k.style.position === "absolute")
+                .sort((a, b) => a.offsetLeft - b.offsetLeft);
+
+            // Map white keys: C D E F G A B pattern, starting at C2
+            const whitePattern = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B in semitones
+            whiteKeys.forEach((key, i) => {
+                const octave = 2 + Math.floor(i / 7);
+                const semitone = whitePattern[i % 7];
+                const noteName = SEMITONE_TO_NOTE[semitone] + octave;
+                keyElements[noteName] = key;
+            });
+
+            // Map black keys: C# D# F# G# A# pattern
+            const blackPattern = [1, 3, 6, 8, 10]; // C# D# F# G# A# in semitones
+            blackKeys.forEach((key, i) => {
+                const octave = 2 + Math.floor(i / 5);
+                const semitone = blackPattern[i % 5];
+                const noteName = SEMITONE_TO_NOTE[semitone] + octave;
+                keyElements[noteName] = key;
+            });
+        }
+
+        function semitoneToNoteName(semitone) {
+            const octave = Math.floor(semitone / 12) - 1; // MIDI octave convention
+            const noteIndex = ((semitone % 12) + 12) % 12;
+            return SEMITONE_TO_NOTE[noteIndex] + octave;
+        }
+
+        function noteNameToSemitone(noteName, octave) {
+            const baseSemitone = NOTE_TO_SEMITONE[noteName];
+            // MIDI: C4 = 60, so C0 = 12
+            return baseSemitone + (parseInt(octave, 10) + 1) * 12;
+        }
+
+        function getNotesForChord(key, octave, type) {
+            const intervals = TRIAD_INTERVALS[type] || [0];
+            const rootSemitone = noteNameToSemitone(key, octave);
+
+            return intervals.map(interval => {
+                const semitone = rootSemitone + interval;
+                return semitoneToNoteName(semitone);
+            });
+        }
+
+        function updateDisplay() {
+            const key = keySelect.value;
+            const octave = octaveSelect.value;
+            const type = typeSelect.value;
+
+            const notes = getNotesForChord(key, octave, type);
+            notesDisplay.textContent = notes.join("  ");
+        }
+
+        function stopAll() {
+            currentNodes.forEach(node => {
+                try {
+                    node.stop();
+                } catch (e) {
+                    // Already stopped
+                }
+            });
+            currentNodes = [];
+        }
+
+        function play() {
+            if (!piano) {
+                setStatus("Piano not loaded yet.");
+                return;
+            }
+
+            stopAll();
+
+            const key = keySelect.value;
+            const octave = octaveSelect.value;
+            const type = typeSelect.value;
+
+            const notes = getNotesForChord(key, octave, type);
+
+            // Play all notes simultaneously
+            const duration = parseFloat(durationInput.value) || 2;
+
+            notes.forEach(note => {
+                const node = piano.play(note, audioCtx.currentTime, {duration: duration});
+                if (node) currentNodes.push(node);
+            });
+
+            const typeName = typeSelect.options[typeSelect.selectedIndex].text;
+            setStatus(`Playing: ${key} ${typeName}`);
+        }
+
+        async function initAudio() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+                setStatus("Loading piano samples (this may take a moment)...");
+
+                piano = await Soundfont.instrument(audioCtx, "acoustic_grand_piano", {
+                    soundfont: "MusyngKite"
+                });
+
+                playBtn.disabled = false;
+                playBtn.textContent = "Play";
+                setStatus("Ready! Select a key and type, then click Play.");
+
+                // Initialize keyboard after piano is loaded
+                initKeyboard();
+            } catch (e) {
+                setStatus("Error loading piano: " + e.message);
+                console.error(e);
+            }
+        }
+
+        function initKeyboard() {
+            const startNote = "C2";
+            const octaves = 5;
+
+            const keyboard = new QwertyHancock({
+                id: "keyboard",
+                width: 1050,
+                height: 180,
+                octaves: octaves,
+                startNote: startNote,
+                whiteKeyColour: "#ffffff",
+                blackKeyColour: "#333333",
+                activeColour: "#4a7aed",
+                borderColour: "#e5e9f2"
+            });
+
+            // Build key map after keyboard is rendered
+            setTimeout(buildKeyMap, 100);
+
+            keyboard.keyDown = function (note, frequency) {
+                if (!piano) return;
+
+                // Resume audio context if needed
+                if (audioCtx && audioCtx.state === "suspended") {
+                    audioCtx.resume();
+                }
+
+                // Stop any existing note with same pitch
+                if (keyboardNodes[note]) {
+                    try {
+                        keyboardNodes[note].stop();
+                    } catch (e) {
+                    }
+                }
+
+                // Play note
+                const node = piano.play(note, audioCtx.currentTime, {duration: 10});
+                keyboardNodes[note] = node;
+                currentNoteDiv.textContent = note;
+            };
+
+            keyboard.keyUp = function (note, frequency) {
+                if (keyboardNodes[note]) {
+                    try {
+                        keyboardNodes[note].stop();
+                    } catch (e) {
+                    }
+                    delete keyboardNodes[note];
+                }
+
+                // Clear display if no keys are held
+                if (Object.keys(keyboardNodes).length === 0) {
+                    currentNoteDiv.textContent = "-";
+                }
+            };
+        }
+
+        // Event listeners
+        playBtn.addEventListener("click", () => {
+            // Resume audio context if suspended (browser autoplay policy)
+            if (audioCtx && audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+            play();
+        });
+
+        stopBtn.addEventListener("click", () => {
+            stopAll();
+            setStatus("Stopped.");
+        });
+
+        playChordBtn.addEventListener("click", () => {
+            if (audioCtx && audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+            playChord();
+        });
+
+        clearChordBtn.addEventListener("click", clearChord);
+
+        // Handle chord input - stop propagation to prevent qwerty-hancock from capturing keys
+        chordInput.addEventListener("keydown", (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+                if (audioCtx && audioCtx.state === "suspended") {
+                    audioCtx.resume();
+                }
+                playChord();
+            }
+        });
+
+        chordInput.addEventListener("keyup", (e) => {
+            e.stopPropagation();
+        });
+
+        keySelect.addEventListener("change", updateDisplay);
+        octaveSelect.addEventListener("change", updateDisplay);
+        typeSelect.addEventListener("change", updateDisplay);
+
+        // Keyboard shortcut: spacebar to play
+        document.addEventListener("keydown", (e) => {
+            if (e.code === "Space" && e.target === document.body) {
+                e.preventDefault();
+                if (!playBtn.disabled) {
+                    if (audioCtx && audioCtx.state === "suspended") {
+                        audioCtx.resume();
+                    }
+                    play();
+                }
+            }
+        });
+
+        // Initialize
+        updateDisplay();
+        initAudio();
+    })();
+</script>
+</body>
+</html>
