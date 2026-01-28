@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transposition Trainer</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      body { margin: 24px; background: #f6f7f9; color: #111; }
+      .card {
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 14px;
+        padding: 16px 16px 18px;
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+      }
+      h1 { margin: 0 0 12px; font-size: 18px; }
+      .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+      .row + .row { margin-top: 10px; }
+      label { display: grid; gap: 6px; font-size: 14px; }
+      select, input {
+        font-size: 14px;
+        padding: 8px 10px;
+        border: 1px solid #cfd6e4;
+        border-radius: 10px;
+      }
+      select:focus-visible, input:focus-visible {
+        outline: 2px solid #4a7aed;
+        outline-offset: 1px;
+      }
+      input[type="number"] { width: 110px; }
+      button {
+        font-size: 14px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cfd6e4;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:hover { background: #f0f3f8; }
+      #score {
+        margin-top: 12px;
+        border: 1px solid #e5e9f2;
+        border-radius: 12px;
+        padding: 10px;
+        min-height: 280px;
+      }
+      .prompt { margin-top: 10px; font-size: 14px; color: #444; }
+      .hint { margin-top: 6px; font-size: 12px; color: #555; }
+      .feedback { margin-top: 10px; min-height: 22px; font-size: 14px; }
+      .stats { margin-top: 10px; display: flex; gap: 18px; font-size: 13px; color: #333; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .pill {
+        font-size: 12px;
+        padding: 3px 8px;
+        border: 1px solid #cfd6e4;
+        border-radius: 999px;
+        background: #fff;
+        color: #333;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h1>Transposition Trainer</h1>
+
+      <div class="row">
+        <label>
+          Transposition
+          <select id="transpSelect">
+            <option value="Bb">B&#9837;</option>
+            <option value="Eb">E&#9837;</option>
+            <option value="F">F</option>
+          </select>
+        </label>
+
+        <label>
+          Concert key
+          <select id="concertKeySelect">
+            <option value="Cb">C&#9837;</option>
+            <option value="Gb">G&#9837;</option>
+            <option value="Db">D&#9837;</option>
+            <option value="Ab">A&#9837;</option>
+            <option value="Eb">E&#9837;</option>
+            <option value="Bb">B&#9837;</option>
+            <option value="F">F</option>
+            <option value="C" selected>C</option>
+            <option value="G">G</option>
+            <option value="D">D</option>
+            <option value="A">A</option>
+            <option value="E">E</option>
+            <option value="B">B</option>
+            <option value="F#">F&#9839;</option>
+            <option value="C#">C&#9839;</option>
+          </select>
+        </label>
+
+        <button id="newBtn" type="button">New note</button>
+
+        <label>
+          Your guess (e.g., C#4 / Db3 / D-3)
+          <input id="guess" class="mono" type="text" placeholder="C#4" autocomplete="off" />
+        </label>
+
+        <button id="checkBtn" type="button">Check</button>
+      </div>
+
+      <div class="row">
+        <label>
+          Min octave
+          <input id="minOct" type="number" step="1" value="3" />
+        </label>
+        <label>
+          Max octave
+          <input id="maxOct" type="number" step="1" value="5" />
+        </label>
+
+        <button id="resetRangesBtn" type="button">Reset defaults</button>
+
+        <span class="pill">Accidentals are spelled exactly</span>
+      </div>
+
+      <div id="promptLabel" class="prompt"></div>
+
+      <div id="score"></div>
+
+      <div id="feedback" class="feedback"></div>
+
+      <div class="stats">
+        <span>Correct: <span id="ok">0</span></span>
+        <span>Wrong: <span id="bad">0</span></span>
+      </div>
+    </div>
+
+    <!-- VexFlow 4.x prebundled build that exposes global Vex.Flow -->
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/releases/vexflow-min.js"></script>
+
+    <script>
+      (function () {
+        // DOM
+        const transpSelect = document.getElementById("transpSelect");
+        const concertKeySelect = document.getElementById("concertKeySelect");
+        const newBtn = document.getElementById("newBtn");
+        const checkBtn = document.getElementById("checkBtn");
+        const guessInput = document.getElementById("guess");
+        const scoreDiv = document.getElementById("score");
+        const feedbackDiv = document.getElementById("feedback");
+        const promptLabel = document.getElementById("promptLabel");
+        const okSpan = document.getElementById("ok");
+        const badSpan = document.getElementById("bad");
+        const minOctInput = document.getElementById("minOct");
+        const maxOctInput = document.getElementById("maxOct");
+        const resetRangesBtn = document.getElementById("resetRangesBtn");
+
+        function setFeedback(msg) { feedbackDiv.textContent = msg; }
+
+        // VexFlow check
+        if (typeof Vex === "undefined" || !Vex.Flow) {
+          setFeedback("VexFlow did not load. Check your internet connection or the CDN URL.");
+          return;
+        }
+        const VF = Vex.Flow;
+
+        // Persistent renderer
+        const renderer = new VF.Renderer(scoreDiv, VF.Renderer.Backends.SVG);
+        renderer.resize(560, 280);
+
+        // Transposition definitions: Concert → Written goes UP by these intervals
+        const TRANSPOSITIONS = {
+          Bb: { label: "B\u266D", dSteps: 1, semiSteps: 2, fifths: 2 },
+          Eb: { label: "E\u266D", dSteps: 5, semiSteps: 9, fifths: 3 },
+          F:  { label: "F",       dSteps: 4, semiSteps: 7, fifths: 1 },
+        };
+
+        // ---- Circle-of-fifths key signature logic ----
+
+        const KEY_TO_POS = {
+          "Cb": -7, "Gb": -6, "Db": -5, "Ab": -4, "Eb": -3, "Bb": -2, "F": -1,
+          "C": 0,
+          "G": 1, "D": 2, "A": 3, "E": 4, "B": 5, "F#": 6, "C#": 7,
+        };
+
+        const POS_TO_VEXKEY = {
+          "-7": "Cb", "-6": "Gb", "-5": "Db", "-4": "Ab", "-3": "Eb", "-2": "Bb", "-1": "F",
+          "0": "C",
+          "1": "G", "2": "D", "3": "A", "4": "E", "5": "B", "6": "F#", "7": "C#",
+        };
+
+        const POS_TO_LABEL = {
+          "-7": "C\u266D", "-6": "G\u266D", "-5": "D\u266D", "-4": "A\u266D", "-3": "E\u266D",
+          "-2": "B\u266D", "-1": "F", "0": "C", "1": "G", "2": "D", "3": "A", "4": "E",
+          "5": "B", "6": "F\u266F", "7": "C\u266F",
+        };
+
+        const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"];
+        const FLAT_ORDER  = ["B", "E", "A", "D", "G", "C", "F"];
+
+        // Returns { letter: acc } map for notes modified by the key signature
+        function getKeyMods(pos) {
+          const mods = {};
+          if (pos > 0) {
+            for (let i = 0; i < Math.min(pos, 7); i++) mods[SHARP_ORDER[i]] = "#";
+          } else if (pos < 0) {
+            for (let i = 0; i < Math.min(-pos, 7); i++) mods[FLAT_ORDER[i]] = "b";
+          }
+          return mods;
+        }
+
+        function getWrittenKeyPos() {
+          const concertPos = KEY_TO_POS[concertKeySelect.value];
+          const fifths = TRANSPOSITIONS[transpSelect.value].fifths;
+          let pos = concertPos + fifths;
+          if (pos > 7) pos -= 12;
+          if (pos < -7) pos += 12;
+          return pos;
+        }
+
+        // ---- Core music data ----
+
+        const LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+        const NATURAL_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+
+        // State
+        let sourceNote = null;
+        let answer = null;
+        let ok = 0;
+        let bad = 0;
+        let autoAdvanceTimer = null;
+
+        // Helpers
+        function randInt(min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+        function choice(arr) {
+          return arr[randInt(0, arr.length - 1)];
+        }
+        function randomAccidental() {
+          const r = Math.random();
+          if (r < 1 / 6) return "#";
+          if (r < 2 / 6) return "b";
+          return "";
+        }
+        function updateStats() {
+          okSpan.textContent = String(ok);
+          badSpan.textContent = String(bad);
+        }
+
+        function accToSemi(acc) {
+          if (acc === "#") return 1;
+          if (acc === "b") return -1;
+          return 0;
+        }
+        function semiToAcc(s) {
+          if (s === 1) return "#";
+          if (s === -1) return "b";
+          if (s === 0) return "";
+          return null; // double accidental
+        }
+
+        function parsePitch(pitch) {
+          const m = /^([A-G])([#b-]?)(-?\d+)$/.exec(pitch);
+          if (!m) return { letter: "C", acc: "", octave: 4 };
+          let acc = m[2] || "";
+          if (acc === "-") acc = "b";
+          return { letter: m[1], acc, octave: parseInt(m[3], 10) };
+        }
+
+        function pitchToVexKey(parsed) {
+          return (parsed.letter.toLowerCase() + parsed.acc + "/" + parsed.octave);
+        }
+
+        function normalizeGuess(s) {
+          const t = (s || "").trim();
+          if (!t) return { ok: false, msg: 'Type a pitch like "C4", "C#4", "Db3", or "D-3".' };
+          const m = /^([A-Ga-g])\s*([#b-]?)\s*(-?\d+)$/.exec(t);
+          if (!m) return { ok: false, msg: 'Use format like "C4", "C#4", "Db3", or "D-3".' };
+          const letter = m[1].toUpperCase();
+          let acc = m[2] || "";
+          const octave = m[3];
+          if (acc === "-") acc = "b";
+          return { ok: true, pitch: `${letter}${acc}${octave}` };
+        }
+
+        // Transposition logic
+        function transpose(pitch, dSteps, semiSteps) {
+          const p = parsePitch(pitch);
+          const oldIdx = LETTERS.indexOf(p.letter);
+          const oldSemi = NATURAL_SEMITONES[oldIdx] + accToSemi(p.acc) + p.octave * 12;
+
+          const rawNewIdx = oldIdx + dSteps;
+          const newIdx = ((rawNewIdx % 7) + 7) % 7;
+          const octavesAdded = Math.floor(rawNewIdx / 7);
+          const newOctave = p.octave + octavesAdded;
+
+          const newSemi = oldSemi + semiSteps;
+          const expectedSemi = NATURAL_SEMITONES[newIdx] + newOctave * 12;
+          const accSemi = newSemi - expectedSemi;
+
+          const accStr = semiToAcc(accSemi);
+          if (accStr === null) return null; // double accidental
+
+          return `${LETTERS[newIdx]}${accStr}${newOctave}`;
+        }
+
+        function getRange() {
+          let minOct = parseInt(minOctInput.value, 10);
+          let maxOct = parseInt(maxOctInput.value, 10);
+          if (!Number.isFinite(minOct)) minOct = 3;
+          if (!Number.isFinite(maxOct)) maxOct = 5;
+          if (minOct > maxOct) { const t = minOct; minOct = maxOct; maxOct = t; }
+          return { minOct, maxOct };
+        }
+
+        function pickSourceAndAnswer() {
+          const r = getRange();
+          const t = TRANSPOSITIONS[transpSelect.value];
+
+          // Written → Concert: transpose DOWN from the written pitch
+          const dSteps = -t.dSteps;
+          const semiSteps = -t.semiSteps;
+
+          for (let attempts = 0; attempts < 200; attempts++) {
+            const letter = choice(LETTERS);
+            const acc = randomAccidental();
+            const octave = randInt(r.minOct, r.maxOct);
+            const src = `${letter}${acc}${octave}`;
+
+            const result = transpose(src, dSteps, semiSteps);
+            if (result === null) continue; // double accidental, re-roll
+
+            return { source: src, answer: result };
+          }
+
+          // Fallback
+          return { source: "C4", answer: transpose("C4", dSteps, semiSteps) || "C4" };
+        }
+
+        function updatePromptLabel() {
+          const t = TRANSPOSITIONS[transpSelect.value];
+          const writtenPos = getWrittenKeyPos();
+          const writtenLabel = POS_TO_LABEL[String(writtenPos)];
+          promptLabel.textContent =
+            `Written pitch for ${t.label} instrument (${writtenLabel} major) \u2014 what is the concert pitch?`;
+        }
+
+        // Grand staff rendering
+        function renderGrandStaff(pitch) {
+          try {
+            const context = renderer.getContext();
+            context.clear();
+            context.setFont("Arial", 10, "");
+
+            const writtenPos = getWrittenKeyPos();
+            const writtenVexKey = POS_TO_VEXKEY[String(writtenPos)];
+            const mods = getKeyMods(writtenPos);
+
+            const trebleStave = new VF.Stave(40, 20, 460);
+            trebleStave.addClef("treble");
+            if (writtenVexKey !== "C") trebleStave.addKeySignature(writtenVexKey);
+            trebleStave.setContext(context).draw();
+
+            const bassStave = new VF.Stave(40, 130, 460);
+            bassStave.addClef("bass");
+            if (writtenVexKey !== "C") bassStave.addKeySignature(writtenVexKey);
+            bassStave.setContext(context).draw();
+
+            // Brace + left barline
+            const brace = new VF.StaveConnector(trebleStave, bassStave);
+            brace.setType(VF.StaveConnector.type.BRACE);
+            brace.setContext(context).draw();
+
+            const lineLeft = new VF.StaveConnector(trebleStave, bassStave);
+            lineLeft.setType(VF.StaveConnector.type.SINGLE_LEFT);
+            lineLeft.setContext(context).draw();
+
+            // Determine which staff gets the note
+            const p = parsePitch(pitch);
+            const noteClef = p.octave >= 4 ? "treble" : "bass";
+            const noteStave = noteClef === "treble" ? trebleStave : bassStave;
+
+            const vexKey = pitchToVexKey(p);
+            const note = new VF.StaveNote({
+              clef: noteClef,
+              keys: [vexKey],
+              duration: "q",
+            });
+
+            // Accidental display: account for key signature
+            const keySigAcc = mods[p.letter] || "";
+            if (p.acc !== keySigAcc) {
+              // Show explicit accidental; use natural sign if note is unmodified
+              // but key sig modifies that letter
+              const displayAcc = p.acc === "" ? "n" : p.acc;
+              note.addAccidental(0, new VF.Accidental(displayAcc));
+            }
+
+            const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+            voice.setMode(VF.Voice.Mode.SOFT);
+            voice.addTickables([note]);
+
+            new VF.Formatter().joinVoices([voice]).format([voice], 350);
+            voice.draw(context, noteStave);
+          } catch (e) {
+            setFeedback("Render error: " + (e && e.message ? e.message : String(e)));
+          }
+        }
+
+        function cancelAutoAdvance() {
+          if (autoAdvanceTimer !== null) {
+            clearTimeout(autoAdvanceTimer);
+            autoAdvanceTimer = null;
+          }
+        }
+
+        function newRound() {
+          cancelAutoAdvance();
+
+          const result = pickSourceAndAnswer();
+          sourceNote = result.source;
+          answer = result.answer;
+
+          updatePromptLabel();
+          renderGrandStaff(sourceNote);
+          setFeedback("");
+          guessInput.value = "";
+          guessInput.focus();
+        }
+
+        function check() {
+          if (!answer) return;
+
+          const parsed = normalizeGuess(guessInput.value);
+          if (!parsed.ok) { setFeedback(parsed.msg); return; }
+
+          if (parsed.pitch.toUpperCase() === answer.toUpperCase()) {
+            ok++;
+            setFeedback("Correct!");
+            updateStats();
+            cancelAutoAdvance();
+            autoAdvanceTimer = setTimeout(newRound, 1200);
+          } else {
+            bad++;
+            setFeedback("Wrong. Correct answer: " + answer);
+            updateStats();
+          }
+        }
+
+        // Wire up UI
+        newBtn.addEventListener("click", newRound);
+        checkBtn.addEventListener("click", check);
+        transpSelect.addEventListener("change", newRound);
+        concertKeySelect.addEventListener("change", newRound);
+        resetRangesBtn.addEventListener("click", () => {
+          minOctInput.value = "3";
+          maxOctInput.value = "5";
+          setFeedback("Ranges reset to defaults.");
+          newRound();
+        });
+
+        guessInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            if (autoAdvanceTimer !== null) {
+              newRound();
+            } else {
+              check();
+            }
+          }
+        });
+
+        // Start
+        updateStats();
+        newRound();
+      })();
+    </script>
+  </body>
+</html>
