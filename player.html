@@ -242,6 +242,7 @@
         <div class="row">
             <input type="text" id="chordInput" class="chord-input" placeholder="e.g. C4 E4 G#4" />
             <button id="playChordBtn" class="play-btn">Play</button>
+            <button id="playCompressedBtn" class="play-btn">Play Compressed</button>
             <button id="clearChordBtn">Clear</button>
         </div>
     </div>
@@ -267,6 +268,7 @@
         const currentNoteDiv = document.getElementById("currentNote");
         const chordInput = document.getElementById("chordInput");
         const playChordBtn = document.getElementById("playChordBtn");
+        const playCompressedBtn = document.getElementById("playCompressedBtn");
         const clearChordBtn = document.getElementById("clearChordBtn");
 
         // Audio context and instrument
@@ -352,6 +354,90 @@
         function clearChord() {
             chordInput.value = "";
             setStatus("Cleared.");
+        }
+
+        function noteToSemitone(note) {
+            const match = note.match(/^([A-G][#b]?)(\d+)$/);
+            if (!match) return null;
+            const noteName = match[1];
+            const octave = parseInt(match[2], 10);
+            const semitone = NOTE_TO_SEMITONE[noteName];
+            if (semitone === undefined) return null;
+            return semitone + (octave + 1) * 12;
+        }
+
+        function semitoneToNote(semitone) {
+            const octave = Math.floor(semitone / 12) - 1;
+            const noteIndex = ((semitone % 12) + 12) % 12;
+            return SEMITONE_TO_NOTE[noteIndex] + octave;
+        }
+
+        function compressChord(notes) {
+            if (notes.length === 0) return [];
+
+            const result = [notes[0]]; // Keep the first note as bass
+            let prevSemitone = noteToSemitone(notes[0]);
+            if (prevSemitone === null) return notes;
+
+            for (let i = 1; i < notes.length; i++) {
+                const note = notes[i];
+                const match = note.match(/^([A-G][#b]?)(\d+)$/);
+                if (!match) {
+                    result.push(note);
+                    continue;
+                }
+
+                const noteName = match[1];
+                const baseSemitone = NOTE_TO_SEMITONE[noteName];
+                if (baseSemitone === undefined) {
+                    result.push(note);
+                    continue;
+                }
+
+                // Find the octave that places this note just above the previous note
+                let targetSemitone = baseSemitone;
+                // Start from octave 0 and find the first one above prevSemitone
+                for (let oct = 0; oct <= 8; oct++) {
+                    targetSemitone = baseSemitone + (oct + 1) * 12;
+                    if (targetSemitone > prevSemitone) {
+                        break;
+                    }
+                }
+
+                const compressedNote = semitoneToNote(targetSemitone);
+                result.push(compressedNote);
+                prevSemitone = targetSemitone;
+            }
+
+            return result;
+        }
+
+        function playCompressed() {
+            if (!piano) {
+                setStatus("Piano not loaded yet.");
+                return;
+            }
+
+            const notes = parseChordInput();
+            if (notes.length === 0) {
+                setStatus("Enter notes like: C4 E4 G#4");
+                return;
+            }
+
+            const compressed = compressChord(notes);
+
+            stopAll();
+
+            const duration = parseFloat(durationInput.value) || 2;
+            const durationMs = duration * 1000;
+
+            compressed.forEach(note => {
+                const node = piano.play(note, audioCtx.currentTime, {duration: duration});
+                if (node) currentNodes.push(node);
+                highlightKey(note, durationMs);
+            });
+
+            setStatus("Playing compressed: " + compressed.join(" "));
         }
 
         function highlightKey(note, durationMs) {
@@ -576,6 +662,13 @@
                 audioCtx.resume();
             }
             playChord();
+        });
+
+        playCompressedBtn.addEventListener("click", () => {
+            if (audioCtx && audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+            playCompressed();
         });
 
         clearChordBtn.addEventListener("click", clearChord);
