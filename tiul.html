@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Tiul - Ear Training</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        body {
+            margin: 24px;
+            background: #f6f7f9;
+            color: #111;
+        }
+
+        .card {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 20px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .row + .row {
+            margin-top: 14px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        select, input[type="text"] {
+            font-size: 14px;
+            padding: 8px 12px;
+            border: 1px solid #cfd6e4;
+            border-radius: 10px;
+            min-width: 100px;
+        }
+
+        select:focus-visible, input:focus-visible {
+            outline: 2px solid #4a7aed;
+            outline-offset: 1px;
+        }
+
+        button {
+            font-size: 14px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid #cfd6e4;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #f0f3f8;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .play-btn {
+            background: #4a7aed;
+            color: #fff;
+            border-color: #4a7aed;
+        }
+
+        .play-btn:hover:not(:disabled) {
+            background: #3a66d4;
+        }
+
+        .notes-display {
+            margin-top: 14px;
+            padding: 14px;
+            background: #fafbfc;
+            border: 1px solid #e5e9f2;
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #555;
+            min-height: 20px;
+        }
+
+        .reveal-display {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2563eb;
+            min-width: 60px;
+            padding: 0 8px;
+            align-self: center;
+        }
+
+        .feedback {
+            margin-top: 12px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            min-height: 24px;
+        }
+
+        .feedback.success {
+            color: #16a34a;
+        }
+
+        .feedback.error {
+            color: #dc2626;
+        }
+
+        .feedback.info {
+            color: #2563eb;
+        }
+
+        .stats {
+            margin-top: 12px;
+            display: flex;
+            gap: 18px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .stats span {
+            padding: 4px 10px;
+            background: #f8f9fb;
+            border-radius: 8px;
+        }
+
+        .guess-input {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            min-width: 120px;
+        }
+
+        .hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .test-mode-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .test-mode-label input {
+            cursor: pointer;
+        }
+
+        .shortcut {
+            font-size: 11px;
+            color: #999;
+            margin-left: 2px;
+        }
+
+        #keyboard {
+            margin-top: 18px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e5e9f2;
+        }
+
+        .keyboard-label {
+            margin-top: 18px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1 id="title">Tiul - Ear Training</h1>
+
+    <div class="row">
+        <label>
+            Key
+            <select id="keySelect"></select>
+        </label>
+
+        <label class="test-mode-label">
+            <input type="checkbox" id="testMode"/> TEST MODE
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="addBtn">Add Note <span class="shortcut">(A)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div class="row">
+        <label>
+            Your guess
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. C, F#, E-" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(C / Enter)</span></button>
+    </div>
+
+    <div id="notesDisplay" class="notes-display">Notes: loading...</div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+        <span>Range: <span id="rangeCount">1</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Keyboard shortcuts: <b>P</b>=Play, <b>N</b>=Next, <b>A</b>=Add note, <b>R</b>=Reveal, <b>C</b>=Check.
+        Guess the note name (without octave). Accepts # for sharp, - or b for flat.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+
+<script>
+    (function () {
+        // ============================================================
+        // APP-SPECIFIC CONFIG
+        // ============================================================
+
+        const TIUL_CONFIG = {
+            DEFAULT_SIZE: 50,
+            DEFAULT_OCTAVE: 4,
+            DEFAULT_OCTAVE_RANGE: 2,
+            MIN_OCTAVE: 1,
+            MAX_OCTAVE: 7
+        };
+
+        function randomOctave(base, range) {
+            base = base || TIUL_CONFIG.DEFAULT_OCTAVE;
+            range = range || TIUL_CONFIG.DEFAULT_OCTAVE_RANGE;
+            const offset = Math.floor(Math.random() * (2 * range + 1)) - range;
+            const result = base + offset;
+            return Math.max(TIUL_CONFIG.MIN_OCTAVE, Math.min(TIUL_CONFIG.MAX_OCTAVE, result));
+        }
+
+        function normalizeGuess(raw) {
+            const s = (raw || '').trim();
+            if (!s) return null;
+            const m = /^([A-Ga-g])\s*([#bB\-]*)$/.exec(s);
+            if (!m) return null;
+            const letter = m[1].toUpperCase();
+            let acc = '';
+            for (const ch of m[2]) {
+                if (ch === '#') acc += '#';
+                else if (ch === '-' || ch === 'b' || ch === 'B') acc += 'b';
+            }
+            return letter + acc;
+        }
+
+        // ============================================================
+        // DOM ELEMENTS
+        // ============================================================
+
+        const titleEl = document.getElementById('title');
+        const keySelect = document.getElementById('keySelect');
+        const testModeCheck = document.getElementById('testMode');
+        const playBtn = document.getElementById('playBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const addBtn = document.getElementById('addBtn');
+        const revealBtn = document.getElementById('revealBtn');
+        const checkBtn = document.getElementById('checkBtn');
+        const guessInput = document.getElementById('guessInput');
+        const revealDisplay = document.getElementById('revealDisplay');
+        const notesDisplay = document.getElementById('notesDisplay');
+        const feedbackDiv = document.getElementById('feedback');
+        const statusDiv = document.getElementById('status');
+        const correctCountEl = document.getElementById('correctCount');
+        const wrongCountEl = document.getElementById('wrongCount');
+        const playedCountEl = document.getElementById('playedCount');
+        const rangeCountEl = document.getElementById('rangeCount');
+
+        // ============================================================
+        // AUDIO (uses TiulPiano wrapper)
+        // ============================================================
+
+        let keyboardStops = {}; // note name -> stop function for keyboard
+
+        // Play a single note given a tiul name and octave, returns { displayName }
+        function playNote(tiulName, octave, duration) {
+            duration = duration || 2.0;
+            if (!TiulPiano.isReady()) return null;
+
+            const midi = tiulNameToMidi(tiulName, octave);
+            const parsed = parseTiulName(tiulName);
+            const displayName = parsed.displayName + octave;
+
+            TiulPiano.stopAll();
+            TiulPiano.play(midi, duration);
+
+            return { displayName: displayName, midi: midi };
+        }
+
+        // ============================================================
+        // SESSION STATE (mirrors TiulSession)
+        // ============================================================
+
+        let session = {
+            key: 'C',
+            tiul: [],
+            currentTiul: [],
+            currentWeights: [],
+            currentRange: 1,
+            currentPitch: '',
+            allPlayed: [],
+            correctCount: 0,
+            wrongCount: 0,
+            startTime: Date.now()
+        };
+
+        function initSession(key) {
+            if (!KEY_DEGREES[key]) return;
+            session.key = key;
+            session.tiul = KEY_DEGREES[key];
+            session.currentTiul = [session.tiul[0]];
+            session.currentWeights = TIUL_WEIGHTS_DEFAULT.slice(0, 1);
+            session.currentRange = 1;
+            session.currentPitch = session.currentTiul[0];
+            session.allPlayed = [];
+            session.correctCount = 0;
+            session.wrongCount = 0;
+            session.startTime = Date.now();
+            updateUI();
+        }
+
+        function generateNextPitch() {
+            return weightedChoice(session.currentTiul, session.currentWeights);
+        }
+
+        function sessionPlayCurrent() {
+            const octave = randomOctave();
+            const result = playNote(session.currentPitch, octave);
+            if (result) {
+                session.allPlayed.push(result.displayName);
+            }
+            return result;
+        }
+
+        function advanceToNext() {
+            session.currentPitch = generateNextPitch();
+            return session.currentPitch;
+        }
+
+        function addNoteToRange() {
+            if (session.currentTiul.length >= session.tiul.length) return false;
+            const nextNote = session.tiul[session.currentTiul.length];
+            session.currentTiul.push(nextNote);
+            session.currentWeights = TIUL_WEIGHTS_DEFAULT.slice(0, session.currentTiul.length);
+            session.currentRange = session.currentTiul.length;
+            return true;
+        }
+
+        function checkAnswer(userGuess) {
+            if (session.allPlayed.length === 0) return { correct: false, message: 'No note played yet!' };
+            const normalized = normalizeGuess(userGuess);
+            if (!normalized) return { correct: false, message: 'Please enter a guess! (e.g. C, F#, E- or Eb)' };
+
+            const lastPlayed = session.allPlayed[session.allPlayed.length - 1];
+            // Extract note name without octave from the last played note
+            const lastNoteName = lastPlayed.replace(/\d+$/, '').toUpperCase();
+            const userNoteName = normalized.toUpperCase();
+
+            if (userNoteName === lastNoteName) {
+                session.correctCount++;
+                return { correct: true, message: 'Correct!' };
+            } else {
+                session.wrongCount++;
+                return { correct: false, message: 'Wrong. Try again!' };
+            }
+        }
+
+        function getLastPlayedNote() {
+            return session.allPlayed.length > 0 ? session.allPlayed[session.allPlayed.length - 1] : null;
+        }
+
+        // ============================================================
+        // UI UPDATES
+        // ============================================================
+
+        function setStatus(msg) { statusDiv.textContent = msg; }
+
+        function setFeedback(msg, type) {
+            feedbackDiv.textContent = msg;
+            feedbackDiv.className = 'feedback ' + (type || '');
+        }
+
+        function clearFeedback() {
+            feedbackDiv.textContent = '';
+            feedbackDiv.className = 'feedback';
+            revealDisplay.textContent = '';
+            guessInput.value = '';
+        }
+
+        function updateUI() {
+            titleEl.textContent = 'Tiul - Key of ' + session.key;
+
+            // Show current available notes
+            const noteNames = session.currentTiul.map(n => parseTiulName(n).displayName);
+            notesDisplay.textContent = 'Notes: ' + noteNames.join(', ');
+
+            correctCountEl.textContent = session.correctCount;
+            wrongCountEl.textContent = session.wrongCount;
+            playedCountEl.textContent = session.allPlayed.length;
+            rangeCountEl.textContent = session.currentRange;
+        }
+
+        // ============================================================
+        // ACTIONS (mirror TiulGUI methods)
+        // ============================================================
+
+        function doPlay() {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            clearFeedback();
+            sessionPlayCurrent();
+            updateUI();
+        }
+
+        function doReveal() {
+            const last = getLastPlayedNote();
+            if (last) {
+                revealDisplay.textContent = last;
+            } else {
+                setFeedback('No note played yet!', 'error');
+            }
+        }
+
+        function doCheck() {
+            const result = checkAnswer(guessInput.value);
+            if (result.correct) {
+                setFeedback(result.message, 'success');
+            } else {
+                setFeedback(result.message, 'error');
+            }
+            guessInput.value = '';
+            guessInput.blur();
+            updateUI();
+        }
+
+        function doNext() {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            clearFeedback();
+            advanceToNext();
+            sessionPlayCurrent();
+            updateUI();
+            if (testModeCheck.checked) {
+                guessInput.focus();
+            }
+        }
+
+        function doAdd() {
+            if (addNoteToRange()) {
+                updateUI();
+                setFeedback('Added: ' + parseTiulName(session.currentTiul[session.currentTiul.length - 1]).displayName, 'info');
+            } else {
+                setFeedback('All notes already added!', 'info');
+            }
+        }
+
+        // ============================================================
+        // POPULATE KEY SELECT
+        // ============================================================
+
+        const keyOrder = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'B-', 'E-', 'A-', 'D-', 'G-', 'C-'];
+        keyOrder.forEach(k => {
+            const opt = document.createElement('option');
+            opt.value = k;
+            // Show friendly name: convert '-' to 'b' for display
+            opt.textContent = k.replace('-', 'b');
+            keySelect.appendChild(opt);
+        });
+        keySelect.value = 'G'; // default like the Python app
+
+        // ============================================================
+        // EVENT LISTENERS
+        // ============================================================
+
+        playBtn.addEventListener('click', doPlay);
+        nextBtn.addEventListener('click', doNext);
+        addBtn.addEventListener('click', doAdd);
+        revealBtn.addEventListener('click', doReveal);
+        checkBtn.addEventListener('click', doCheck);
+
+        keySelect.addEventListener('change', () => {
+            initSession(keySelect.value);
+            clearFeedback();
+            setStatus('Key changed to ' + keySelect.value + '. Press Play or Next.');
+        });
+
+        guessInput.addEventListener('keydown', (e) => {
+            e.stopPropagation(); // prevent keyboard shortcuts while typing
+            if (e.key === 'Enter') {
+                doCheck();
+            }
+        });
+
+        guessInput.addEventListener('keyup', (e) => {
+            e.stopPropagation();
+        });
+
+        // Keyboard shortcuts (P, N, A, R, C) - capture phase so they fire
+        // before qwerty-hancock consumes the key as a piano note
+        const SHORTCUT_KEYS = { 'P': doPlay, 'N': doNext, 'A': doAdd, 'R': doReveal, 'C': doCheck };
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+            const handler = SHORTCUT_KEYS[e.key.toUpperCase()];
+            if (handler) {
+                e.preventDefault();
+                e.stopImmediatePropagation(); // prevent qwerty-hancock from also handling
+                handler();
+            }
+        }, true);
+
+        // ============================================================
+        // PIANO KEYBOARD (qwerty-hancock + soundfont)
+        // ============================================================
+
+        function initKeyboard() {
+            const keyboard = new QwertyHancock({
+                id: 'keyboard',
+                width: 850,
+                height: 150,
+                octaves: 4,
+                startNote: 'C3',
+                whiteKeyColour: '#ffffff',
+                blackKeyColour: '#333333',
+                activeColour: '#4a7aed',
+                borderColour: '#e5e9f2'
+            });
+
+            keyboard.keyDown = function (note) {
+                if (!TiulPiano.isReady()) return;
+                if (keyboardStops[note]) {
+                    keyboardStops[note]();
+                }
+                keyboardStops[note] = TiulPiano.playNote(note, 10);
+            };
+
+            keyboard.keyUp = function (note) {
+                if (keyboardStops[note]) {
+                    keyboardStops[note]();
+                    delete keyboardStops[note];
+                }
+            };
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+
+        function initAudio() {
+            setStatus('Loading piano samples (this may take a moment)...');
+            TiulPiano.init(
+                function () {
+                    playBtn.disabled = false;
+                    setStatus('Ready! Select a key, then press Play or Next.');
+                    initKeyboard();
+                },
+                function (e) {
+                    setStatus('Error loading piano: ' + e.message);
+                    console.error(e);
+                }
+            );
+        }
+
+        initSession('G');
+        initAudio();
+    })();
+</script>
+</body>
+</html>

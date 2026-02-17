@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Directions for 2 - Movement Ear Training</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        body {
+            margin: 24px;
+            background: #f6f7f9;
+            color: #111;
+        }
+
+        .card {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 20px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .row + .row {
+            margin-top: 14px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        select {
+            font-size: 14px;
+            padding: 8px 12px;
+            border: 1px solid #cfd6e4;
+            border-radius: 10px;
+            min-width: 100px;
+        }
+
+        select:focus-visible {
+            outline: 2px solid #4a7aed;
+            outline-offset: 1px;
+        }
+
+        button {
+            font-size: 14px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid #cfd6e4;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #f0f3f8;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .play-btn {
+            background: #4a7aed;
+            color: #fff;
+            border-color: #4a7aed;
+        }
+
+        .play-btn:hover:not(:disabled) {
+            background: #3a66d4;
+        }
+
+        .reveal-inline {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2563eb;
+            min-width: 120px;
+            padding: 0 8px;
+            align-self: center;
+        }
+
+        .prompt-label {
+            margin-top: 14px;
+            padding: 12px 14px;
+            background: #fafbfc;
+            border: 1px solid #e5e9f2;
+            border-radius: 10px;
+            font-size: 15px;
+            min-height: 22px;
+        }
+
+        .direction-row {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .direction-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .direction-group .dir-label {
+            font-weight: 600;
+            min-width: 65px;
+        }
+
+        .dir-btn {
+            font-size: 13px;
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1px solid #cfd6e4;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .dir-btn:hover {
+            background: #f0f3f8;
+        }
+
+        .dir-btn.selected {
+            background: #4a7aed;
+            color: #fff;
+            border-color: #4a7aed;
+        }
+
+        .dir-btn.correct {
+            background: #16a34a;
+            color: #fff;
+            border-color: #16a34a;
+        }
+
+        .dir-btn.wrong {
+            background: #dc2626;
+            color: #fff;
+            border-color: #dc2626;
+        }
+
+        .feedback {
+            margin-top: 12px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            min-height: 24px;
+        }
+
+        .feedback.success { color: #16a34a; }
+        .feedback.error { color: #dc2626; }
+        .feedback.info { color: #2563eb; }
+
+        .stats {
+            margin-top: 12px;
+            display: flex;
+            gap: 18px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .stats span {
+            padding: 4px 10px;
+            background: #f8f9fb;
+            border-radius: 8px;
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #555;
+            min-height: 20px;
+        }
+
+        .hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .shortcut {
+            font-size: 11px;
+            color: #999;
+            margin-left: 2px;
+        }
+
+        .arrow { font-size: 18px; }
+        .arrow.up { color: #16a34a; }
+        .arrow.down { color: #dc2626; }
+        .arrow.same { color: #777; }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1 id="title">Directions for 2 - Movement Training</h1>
+
+    <div class="row">
+        <label>
+            Key
+            <select id="keySelect"></select>
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="prevBtn" disabled>Prev <span class="shortcut">(A)</span></button>
+        <button id="playBtn" class="play-btn" disabled>Play Pair <span class="shortcut">(P)</span></button>
+        <button id="nextBtn" disabled>Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <span id="revealDisplay" class="reveal-inline"></span>
+    </div>
+
+    <div id="promptLabel" class="prompt-label">Press Next to start</div>
+
+    <div class="row">
+        <div class="direction-row">
+            <div class="direction-group">
+                <span class="dir-label">Bass:</span>
+                <button class="dir-btn" data-voice="bass" data-dir="up">Up</button>
+                <button class="dir-btn" data-voice="bass" data-dir="same">Same</button>
+                <button class="dir-btn" data-voice="bass" data-dir="down">Down</button>
+            </div>
+            <div class="direction-group">
+                <span class="dir-label">Soprano:</span>
+                <button class="dir-btn" data-voice="soprano" data-dir="up">Up</button>
+                <button class="dir-btn" data-voice="soprano" data-dir="same">Same</button>
+                <button class="dir-btn" data-voice="soprano" data-dir="down">Down</button>
+            </div>
+            <button id="checkBtn">Check <span class="shortcut">(C)</span></button>
+        </div>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Transitions: <span id="transCount">0</span></span>
+        <span>Grade: <span id="grade">-</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>N</b>=Next (plays current then new), <b>P</b>=Play pair again, <b>A</b>=Prev chord only,
+        <b>R</b>=Reveal, <b>C</b>=Check.
+        Click or use keyboard: <b>U</b>=up, <b>S</b>=same, <b>D</b>=down (fills bass first, then soprano). <b>Tab</b> switches voice.
+    </div>
+</div>
+
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+
+<script>
+    (function () {
+        // ============================================================
+        // DOM
+        // ============================================================
+
+        const titleEl = document.getElementById('title');
+        const keySelect = document.getElementById('keySelect');
+        const prevBtn = document.getElementById('prevBtn');
+        const playBtn = document.getElementById('playBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const revealBtn = document.getElementById('revealBtn');
+        const revealDisplay = document.getElementById('revealDisplay');
+        const checkBtn = document.getElementById('checkBtn');
+        const promptLabel = document.getElementById('promptLabel');
+        const feedbackDiv = document.getElementById('feedback');
+        const statusDiv = document.getElementById('status');
+        const correctCountEl = document.getElementById('correctCount');
+        const wrongCountEl = document.getElementById('wrongCount');
+        const transCountEl = document.getElementById('transCount');
+        const gradeEl = document.getElementById('grade');
+
+        const dirButtons = document.querySelectorAll('.dir-btn');
+
+        // ============================================================
+        // DIRECTION BUTTON STATE
+        // ============================================================
+
+        let bassSelection = null;
+        let sopranoSelection = null;
+        let activeVoice = 'bass'; // which voice gets keyboard u/d/s input
+
+        function clearDirButtons() {
+            bassSelection = null;
+            sopranoSelection = null;
+            dirButtons.forEach(btn => {
+                btn.classList.remove('selected', 'correct', 'wrong');
+            });
+        }
+
+        function selectDir(voice, dir) {
+            // Deselect others in same voice
+            dirButtons.forEach(btn => {
+                if (btn.dataset.voice === voice) {
+                    btn.classList.remove('selected', 'correct', 'wrong');
+                }
+            });
+            // Select this one
+            dirButtons.forEach(btn => {
+                if (btn.dataset.voice === voice && btn.dataset.dir === dir) {
+                    btn.classList.add('selected');
+                }
+            });
+            if (voice === 'bass') {
+                bassSelection = dir;
+                activeVoice = 'soprano'; // auto-advance to soprano
+            }
+            if (voice === 'soprano') sopranoSelection = dir;
+        }
+
+        dirButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectDir(btn.dataset.voice, btn.dataset.dir);
+            });
+        });
+
+        // ============================================================
+        // AUDIO
+        // ============================================================
+
+        function playMidiPair(midi1, midi2, duration) {
+            if (!TiulPiano.isReady()) return;
+            duration = duration || 3.0;
+            TiulPiano.stopAll();
+            TiulPiano.playChord([midi1, midi2], duration);
+        }
+
+        // ============================================================
+        // NOTE SPELLING (same as tiul_for_2)
+        // ============================================================
+
+        function midiToSpelledName(originalMidi, keyDegrees, transposeOffset) {
+            const pitchClass = originalMidi % 12;
+            const degreeIndex = MIDI_DEGREES.indexOf(pitchClass);
+            if (degreeIndex === -1 || degreeIndex >= keyDegrees.length) {
+                return midiToSoundfontName(originalMidi + transposeOffset);
+            }
+            const noteName = keyDegrees[degreeIndex];
+            const parsed = parseTiulName(noteName);
+            const transposedMidi = originalMidi + transposeOffset;
+            const octave = Math.floor(transposedMidi / 12) - 1;
+            return parsed.displayName + octave;
+        }
+
+        function chordDisplayName(midiPair, keyDegrees, transposeOffset) {
+            const orig1 = midiPair[0] - transposeOffset;
+            const orig2 = midiPair[1] - transposeOffset;
+            const n1 = midiToSpelledName(orig1, keyDegrees, transposeOffset);
+            const n2 = midiToSpelledName(orig2, keyDegrees, transposeOffset);
+            return n1 + ', ' + n2;
+        }
+
+        // ============================================================
+        // DIAD TRANSITION MATRIX (shared with tiul_for_2)
+        // ============================================================
+
+        function buildDiadTransitionMatrix(midiPairs, transposeOffset) {
+            const transposed = midiPairs.map(p => [p[0] + transposeOffset, p[1] + transposeOffset]);
+            const tupleKeys = transposed.map(p => p[0] + ',' + p[1]);
+            const uniqueKeys = [...new Set(tupleKeys)];
+            const keyToIndex = {};
+            const indexToKey = {};
+            uniqueKeys.forEach((k, i) => { keyToIndex[k] = i; indexToKey[i] = k; });
+            const size = uniqueKeys.length;
+
+            const matrix = [];
+            for (let i = 0; i < size; i++) matrix.push(new Array(size).fill(0));
+            for (let i = 0; i < tupleKeys.length - 1; i++) {
+                matrix[keyToIndex[tupleKeys[i]]][keyToIndex[tupleKeys[i + 1]]]++;
+            }
+            for (let i = 0; i < size; i++) {
+                const rowSum = matrix[i].reduce((a, b) => a + b, 0);
+                if (rowSum > 0) {
+                    for (let j = 0; j < size; j++) matrix[i][j] /= rowSum;
+                }
+            }
+            return { matrix, keyToIndex, indexToKey, size };
+        }
+
+        // ============================================================
+        // SESSION STATE
+        // ============================================================
+
+        let session = null;
+
+        function createSession(key) {
+            const keyDegrees = KEY_DEGREES[key];
+            const transposeOffset = KEY_OFFSETS[key] || 0;
+            const tm = buildDiadTransitionMatrix(SAMPLE_DOUBLE_5_MIDI, transposeOffset);
+
+            const firstPair = [
+                SAMPLE_DOUBLE_5_MIDI[0][0] + transposeOffset,
+                SAMPLE_DOUBLE_5_MIDI[0][1] + transposeOffset
+            ];
+            const firstKey = firstPair[0] + ',' + firstPair[1];
+
+            return {
+                key: key,
+                keyDegrees: keyDegrees,
+                transposeOffset: transposeOffset,
+                tm: tm,
+                previousMidi: null,
+                currentMidi: firstPair,
+                currentIndex: tm.keyToIndex[firstKey],
+                expectedBass: null,
+                expectedSoprano: null,
+                allPlayed: [],
+                correctCount: 0,
+                wrongCount: 0,
+                transCount: 0
+            };
+        }
+
+        function getNextChord(s) {
+            const weights = s.tm.matrix[s.currentIndex];
+            const indices = Array.from({ length: s.tm.size }, (_, i) => i);
+            const nextIndex = weightedChoice(indices, weights);
+            const pairStr = s.tm.indexToKey[nextIndex];
+            const parts = pairStr.split(',').map(Number);
+
+            s.previousMidi = s.currentMidi;
+            s.currentMidi = parts;
+            s.currentIndex = nextIndex;
+
+            // Calculate movement directions
+            if (s.previousMidi) {
+                s.expectedBass = parts[0] > s.previousMidi[0] ? 'up' : (parts[0] < s.previousMidi[0] ? 'down' : 'same');
+                s.expectedSoprano = parts[1] > s.previousMidi[1] ? 'up' : (parts[1] < s.previousMidi[1] ? 'down' : 'same');
+            }
+
+            s.transCount++;
+            return parts;
+        }
+
+        function ensureSecondHigher(midi1, midi2) {
+            return midi2 <= midi1 ? [midi1, midi2 + 12] : [midi1, midi2];
+        }
+
+        function playChordPair(s, pair) {
+            if (!TiulPiano.isReady() || !pair) return;
+            const [m1, m2] = ensureSecondHigher(pair[0], pair[1]);
+            playMidiPair(m1, m2, 3.0);
+        }
+
+        function playCurrentChord(s) {
+            playChordPair(s, s.currentMidi);
+            const display = chordDisplayName(s.currentMidi, s.keyDegrees, s.transposeOffset);
+            s.allPlayed.push(display);
+        }
+
+        // ============================================================
+        // UI
+        // ============================================================
+
+        function setStatus(msg) { statusDiv.textContent = msg; }
+
+        function setFeedback(msg, type) {
+            feedbackDiv.textContent = msg;
+            feedbackDiv.className = 'feedback ' + (type || '');
+        }
+
+        function clearFeedback() {
+            feedbackDiv.textContent = '';
+            feedbackDiv.className = 'feedback';
+            revealDisplay.textContent = '';
+        }
+
+        function dirArrow(dir) {
+            if (dir === 'up') return '\u2191';
+            if (dir === 'down') return '\u2193';
+            return '\u2194';
+        }
+
+        function updateStats() {
+            if (!session) return;
+            correctCountEl.textContent = session.correctCount;
+            wrongCountEl.textContent = session.wrongCount;
+            transCountEl.textContent = session.transCount;
+            const total = session.correctCount + session.wrongCount;
+            gradeEl.textContent = total > 0 ? ((session.correctCount / total) * 100).toFixed(1) + '%' : '-';
+        }
+
+        // ============================================================
+        // ACTIONS
+        // ============================================================
+
+        function doPrev() {
+            if (!session || !session.previousMidi) {
+                setFeedback('No previous chord yet!', 'error');
+                return;
+            }
+            playChordPair(session, session.previousMidi);
+        }
+
+        function doPlay() {
+            if (!session || !TiulPiano.isReady()) return;
+
+            if (session.previousMidi) {
+                // Play previous, then current after delay
+                playChordPair(session, session.previousMidi);
+                setTimeout(() => {
+                    playChordPair(session, session.currentMidi);
+                }, 600);
+            } else {
+                playChordPair(session, session.currentMidi);
+            }
+        }
+
+        function doNext() {
+            if (!session || !TiulPiano.isReady()) return;
+            clearFeedback();
+            clearDirButtons();
+            activeVoice = 'bass';
+
+            // Play current (becomes previous), then after delay advance and play new
+            playCurrentChord(session);
+            setTimeout(() => {
+                getNextChord(session);
+                playCurrentChord(session);
+                promptLabel.textContent = 'What moved? (Bass / Soprano: up, same, down)';
+                updateStats();
+            }, 600);
+        }
+
+        function doReveal() {
+            if (!session || !session.expectedBass) {
+                setFeedback('Press Next first to hear a transition!', 'error');
+                return;
+            }
+            const b = session.expectedBass;
+            const s = session.expectedSoprano;
+            const prevName = chordDisplayName(session.previousMidi, session.keyDegrees, session.transposeOffset);
+            const currName = chordDisplayName(session.currentMidi, session.keyDegrees, session.transposeOffset);
+            revealDisplay.textContent =
+                'Bass: ' + b[0] + ' ' + dirArrow(b) +
+                '  Sop: ' + s[0] + ' ' + dirArrow(s) +
+                '  (' + prevName + ' \u2192 ' + currName + ')';
+        }
+
+        function doCheck() {
+            if (!session) return;
+            if (!session.expectedBass) {
+                setFeedback('Press Next first to hear a transition!', 'error');
+                return;
+            }
+            if (!bassSelection || !sopranoSelection) {
+                setFeedback('Select both Bass and Soprano directions!', 'error');
+                return;
+            }
+
+            const bassOk = bassSelection === session.expectedBass;
+            const sopOk = sopranoSelection === session.expectedSoprano;
+
+            // Highlight correct/wrong on buttons
+            dirButtons.forEach(btn => {
+                if (btn.classList.contains('selected')) {
+                    const voice = btn.dataset.voice;
+                    const isCorrect = (voice === 'bass' && bassOk) || (voice === 'soprano' && sopOk);
+                    btn.classList.remove('selected');
+                    btn.classList.add(isCorrect ? 'correct' : 'wrong');
+                }
+            });
+
+            if (bassOk && sopOk) {
+                session.correctCount++;
+                setFeedback('Correct!', 'success');
+            } else {
+                session.wrongCount++;
+                setFeedback('Wrong.', 'error');
+            }
+
+            updateStats();
+        }
+
+        // ============================================================
+        // POPULATE KEY SELECT
+        // ============================================================
+
+        KEY_ORDER.forEach(k => {
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = k.replace('-', 'b');
+            keySelect.appendChild(opt);
+        });
+        keySelect.value = 'C';
+
+        // ============================================================
+        // EVENT LISTENERS
+        // ============================================================
+
+        prevBtn.addEventListener('click', doPrev);
+        playBtn.addEventListener('click', doPlay);
+        nextBtn.addEventListener('click', doNext);
+        revealBtn.addEventListener('click', doReveal);
+        checkBtn.addEventListener('click', doCheck);
+
+        keySelect.addEventListener('change', () => {
+            session = createSession(keySelect.value);
+            clearFeedback();
+            clearDirButtons();
+            promptLabel.textContent = 'Press Next to start';
+            titleEl.textContent = 'Directions for 2 - Key of ' + session.key;
+            updateStats();
+            setStatus('Key changed to ' + session.key + '. Press Next.');
+        });
+
+        // Keyboard shortcuts - capture phase
+        const CMD_SHORTCUTS = { 'P': doPlay, 'N': doNext, 'R': doReveal, 'A': doPrev, 'C': doCheck };
+        const DIR_MAP = { 'U': 'up', 'D': 'down', 'S': 'same' };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            const key = e.key.toUpperCase();
+
+            // Command shortcuts
+            const cmdHandler = CMD_SHORTCUTS[key];
+            if (cmdHandler) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                cmdHandler();
+                return;
+            }
+
+            // Direction shortcuts (u/d/s) - fills active voice
+            const dir = DIR_MAP[key];
+            if (dir) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                selectDir(activeVoice, dir);
+                return;
+            }
+
+            // Tab to switch active voice
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                activeVoice = activeVoice === 'bass' ? 'soprano' : 'bass';
+            }
+        }, true);
+
+        // ============================================================
+        // INIT
+        // ============================================================
+
+        function initAudio() {
+            setStatus('Loading piano samples (this may take a moment)...');
+            TiulPiano.init(
+                function () {
+                    prevBtn.disabled = false;
+                    playBtn.disabled = false;
+                    nextBtn.disabled = false;
+                    setStatus('Ready! Press Next to hear the first transition.');
+                },
+                function (e) {
+                    setStatus('Error loading piano: ' + e.message);
+                }
+            );
+        }
+
+        session = createSession('C');
+        titleEl.textContent = 'Directions for 2 - Key of ' + session.key;
+        updateStats();
+        initAudio();
+    })();
+</script>
+</body>
+</html>

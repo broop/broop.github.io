@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Reverse Tiul - Markov Ear Training</title>
+    <style>
+        :root {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a2e;
+            color: #c8d6e5;
+        }
+
+        .terminal {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 16px 20px;
+        }
+
+        .header {
+            color: #00d2d3;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .config-row {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .config-row label {
+            color: #778ca3;
+        }
+
+        .config-row select {
+            font-family: inherit;
+            font-size: 13px;
+            background: #0f0f23;
+            color: #c8d6e5;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 3px 6px;
+        }
+
+        .config-row select:focus {
+            outline: 1px solid #00d2d3;
+        }
+
+        .test-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .test-toggle input {
+            cursor: pointer;
+        }
+
+        .commands {
+            display: flex;
+            gap: 6px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+
+        .cmd-btn {
+            font-family: inherit;
+            font-size: 13px;
+            background: #0f0f23;
+            color: #c8d6e5;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background 0.1s, border-color 0.1s;
+        }
+
+        .cmd-btn:hover {
+            background: #1e1e3a;
+            border-color: #00d2d3;
+        }
+
+        .cmd-btn .key {
+            color: #feca57;
+        }
+
+        .reveal-inline {
+            font-size: 14px;
+            font-weight: 700;
+            color: #54a0ff;
+            min-width: 60px;
+            display: inline-block;
+        }
+
+        .log {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #0f0f23;
+            border: 1px solid #222;
+            border-radius: 6px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .log-line { margin: 0; }
+        .log-line.info { color: #778ca3; }
+        .log-line.note { color: #c8d6e5; }
+        .log-line.correct { color: #2ed573; }
+        .log-line.wrong { color: #ff6b6b; }
+        .log-line.reveal { color: #54a0ff; }
+        .log-line.heading { color: #00d2d3; font-weight: 700; }
+        .log-line.warn { color: #feca57; }
+
+        .guess-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
+        .guess-row input {
+            font-family: inherit;
+            font-size: 14px;
+            background: #0f0f23;
+            color: #c8d6e5;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 5px 10px;
+            width: 100px;
+        }
+
+        .guess-row input:focus {
+            outline: 1px solid #00d2d3;
+        }
+
+        .prompt { color: #feca57; }
+
+        .stats {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #778ca3;
+            display: flex;
+            gap: 16px;
+        }
+
+        .stats .val { color: #c8d6e5; }
+
+        .available-notes {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #778ca3;
+        }
+
+        .available-notes .notes { color: #c8d6e5; }
+    </style>
+</head>
+
+<body>
+<div class="terminal">
+    <div class="header">Reverse Tiul - Markov Chain Ear Training</div>
+
+    <div class="config-row">
+        <label>key:</label>
+        <select id="keySelect"></select>
+        <label>sample:</label>
+        <select id="sampleSelect"></select>
+        <label class="test-toggle"><input type="checkbox" id="testMode"/> test mode</label>
+        <button class="cmd-btn" id="startBtn">start</button>
+    </div>
+
+    <div class="commands">
+        <button class="cmd-btn" id="nextBtn" disabled>[<span class="key">n</span>] next</button>
+        <button class="cmd-btn" id="againBtn" disabled>[<span class="key">a</span>] again</button>
+        <button class="cmd-btn" id="revealBtn" disabled>[<span class="key">r</span>] reveal</button>
+        <span id="revealDisplay" class="reveal-inline"></span>
+        <button class="cmd-btn" id="checkBtn" disabled>[<span class="key">c</span>] check</button>
+    </div>
+
+    <div class="guess-row">
+        <span class="prompt">&gt;</span>
+        <input type="text" id="guessInput" placeholder="your guess" autocomplete="off" disabled/>
+    </div>
+
+    <div class="available-notes">
+        notes in <span id="keyLabel">-</span>: <span id="availableNotes" class="notes">-</span>
+    </div>
+
+    <div class="stats">
+        <span>played: <span class="val" id="playedCount">0</span></span>
+        <span>correct: <span class="val" id="correctCount">0</span></span>
+        <span>wrong: <span class="val" id="wrongCount">0</span></span>
+        <span>grade: <span class="val" id="grade">-</span></span>
+    </div>
+
+    <div id="log" class="log"></div>
+</div>
+
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+
+<script>
+    (function () {
+        // ============================================================
+        // DOM
+        // ============================================================
+
+        const keySelect = document.getElementById('keySelect');
+        const sampleSelect = document.getElementById('sampleSelect');
+        const testModeCheck = document.getElementById('testMode');
+        const startBtn = document.getElementById('startBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const againBtn = document.getElementById('againBtn');
+        const revealBtn = document.getElementById('revealBtn');
+        const revealDisplay = document.getElementById('revealDisplay');
+        const checkBtn = document.getElementById('checkBtn');
+        const guessInput = document.getElementById('guessInput');
+        const logDiv = document.getElementById('log');
+        const keyLabel = document.getElementById('keyLabel');
+        const availableNotesEl = document.getElementById('availableNotes');
+        const playedCountEl = document.getElementById('playedCount');
+        const correctCountEl = document.getElementById('correctCount');
+        const wrongCountEl = document.getElementById('wrongCount');
+        const gradeEl = document.getElementById('grade');
+
+        // Populate selects
+        KEY_ORDER.forEach(k => {
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = k.replace('-', 'b');
+            keySelect.appendChild(opt);
+        });
+        keySelect.value = 'G';
+
+        SAMPLE_LABELS.forEach((label, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = label;
+            sampleSelect.appendChild(opt);
+        });
+
+        // ============================================================
+        // AUDIO
+        // ============================================================
+
+        function playSoundfontNote(midi, duration) {
+            if (!TiulPiano.isReady()) return;
+            TiulPiano.stopAll();
+            TiulPiano.play(midi, duration || 3.0);
+        }
+
+        // ============================================================
+        // SESSION STATE
+        // ============================================================
+
+        let session = null;
+
+        function createSession(key, sampleIdx) {
+            const keyDegrees = KEY_DEGREES[key];
+            const sample = SAMPLES[sampleIdx];
+            const matrix = buildTransitionMatrix(sample, keyDegrees.length);
+
+            return {
+                key: key,
+                keyDegrees: keyDegrees,
+                transitionMatrix: matrix,
+                currentIndex: 0,
+                currentPitch: keyDegrees[0],
+                currentOctave: 4,
+                lastPlayedDisplay: null,
+                history: [],
+                count: 0,
+                correctCount: 0,
+                wrongCount: 0,
+                started: false
+            };
+        }
+
+        function getNextNote(s) {
+            const weights = s.transitionMatrix[s.currentIndex];
+            const nextPitch = weightedChoice(s.keyDegrees, weights);
+            s.currentIndex = s.keyDegrees.indexOf(nextPitch);
+            s.currentPitch = nextPitch;
+            return nextPitch;
+        }
+
+        function playCurrentNote(s, forceOctave) {
+            const baseOctave = 4;
+            const variation = 1;
+            const octave = forceOctave != null
+                ? forceOctave
+                : Math.max(1, Math.min(8, baseOctave + Math.floor(Math.random() * (2 * variation + 1)) - variation));
+            s.currentOctave = octave;
+
+            const midi = tiulNameToMidi(s.currentPitch, octave);
+            const display = parseTiulName(s.currentPitch).displayName + octave;
+            s.lastPlayedDisplay = display;
+
+            playSoundfontNote(midi, 3.0);
+
+            s.history.push(display);
+            return display;
+        }
+
+        // ============================================================
+        // LOG OUTPUT (mimics CLI print)
+        // ============================================================
+
+        function log(text, cls) {
+            const p = document.createElement('p');
+            p.className = 'log-line ' + (cls || 'note');
+            p.textContent = text;
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+
+        // ============================================================
+        // UI UPDATE
+        // ============================================================
+
+        function updateStats() {
+            if (!session) return;
+            playedCountEl.textContent = session.count;
+            correctCountEl.textContent = session.correctCount;
+            wrongCountEl.textContent = session.wrongCount;
+            const total = session.correctCount + session.wrongCount;
+            gradeEl.textContent = total > 0
+                ? ((session.correctCount / total) * 100).toFixed(1) + '%'
+                : '-';
+        }
+
+        function setCommandsEnabled(enabled) {
+            nextBtn.disabled = !enabled;
+            againBtn.disabled = !enabled;
+            revealBtn.disabled = !enabled;
+            checkBtn.disabled = !enabled;
+            guessInput.disabled = !enabled;
+        }
+
+        // ============================================================
+        // ACTIONS
+        // ============================================================
+
+        function doStart() {
+            if (!TiulPiano.isReady()) { log('Piano not loaded yet.', 'warn'); return; }
+
+            const key = keySelect.value;
+            const sampleIdx = parseInt(sampleSelect.value, 10);
+            session = createSession(key, sampleIdx);
+            session.started = true;
+
+            clearLog();
+            revealDisplay.textContent = '';
+
+            // Show info like the Python verbose output
+            const sampleDegrees = new Set(SAMPLES[sampleIdx]);
+            const availableNotes = [...sampleDegrees].sort((a, b) => a - b).map(i => session.keyDegrees[i]);
+
+            keyLabel.textContent = key;
+            availableNotesEl.textContent = session.keyDegrees.map(n => parseTiulName(n).displayName).join(', ');
+
+            log('Reverse Tiul Training Started!', 'heading');
+            log('Key: ' + key + ' | Sample: ' + sampleIdx, 'info');
+            log('Available notes in sample: ' + availableNotes.map(n => parseTiulName(n).displayName).join(', '), 'info');
+            log('Commands: (n)ext, (a)gain, (r)eveal, (c)heck', 'info');
+            log('', 'info');
+
+            // Play first note
+            playCurrentNote(session);
+            session.count++;
+            log('Note #' + session.count + ' played.', 'info');
+
+            setCommandsEnabled(true);
+            updateStats();
+
+            if (testModeCheck.checked) {
+                guessInput.focus();
+            }
+        }
+
+        function doNext() {
+            if (!session || !session.started) return;
+            revealDisplay.textContent = '';
+            getNextNote(session);
+            playCurrentNote(session);
+            session.count++;
+            log('Note #' + session.count + ' played.', 'info');
+            updateStats();
+
+            if (testModeCheck.checked) {
+                guessInput.value = '';
+                guessInput.focus();
+            }
+        }
+
+        function doAgain() {
+            if (!session || !session.started) return;
+            playCurrentNote(session, session.currentOctave);
+            log('(replayed)', 'info');
+        }
+
+        function doReveal() {
+            if (!session || !session.started) return;
+            if (session.lastPlayedDisplay) {
+                revealDisplay.textContent = session.lastPlayedDisplay;
+                log('Revealed: ' + session.lastPlayedDisplay, 'reveal');
+            } else {
+                log('No note played yet.', 'warn');
+            }
+        }
+
+        function doCheck() {
+            if (!session || !session.started) return;
+            if (!session.lastPlayedDisplay) {
+                log('No note played yet!', 'warn');
+                return;
+            }
+
+            const raw = guessInput.value.trim();
+            if (!raw) {
+                guessInput.focus();
+                return;
+            }
+
+            // Normalize: accept # for sharp, - or b for flat
+            const m = /^([A-Ga-g])\s*([#bB\-]*)$/.exec(raw);
+            if (!m) {
+                log("Invalid input. Use note name like C, F#, Eb, or B-", 'warn');
+                guessInput.value = '';
+                guessInput.focus();
+                return;
+            }
+
+            const letter = m[1].toUpperCase();
+            let acc = '';
+            for (const ch of m[2]) {
+                if (ch === '#') acc += '#';
+                else if (ch === '-' || ch === 'b' || ch === 'B') acc += 'b';
+            }
+            const userGuess = letter + acc;
+
+            // Get correct note name (without octave)
+            const correctDisplay = session.lastPlayedDisplay.replace(/\d+$/, '');
+
+            // Also normalize the correct answer for comparison
+            // The correct answer comes from parseTiulName which uses b for flats
+            if (userGuess.toUpperCase() === correctDisplay.toUpperCase()) {
+                session.correctCount++;
+                log('Correct! The note was ' + correctDisplay, 'correct');
+            } else {
+                session.wrongCount++;
+                log('Incorrect.', 'wrong');
+            }
+
+            guessInput.value = '';
+            updateStats();
+
+            if (testModeCheck.checked) {
+                guessInput.focus();
+            }
+        }
+
+        // ============================================================
+        // EVENT LISTENERS
+        // ============================================================
+
+        startBtn.addEventListener('click', doStart);
+        nextBtn.addEventListener('click', doNext);
+        againBtn.addEventListener('click', doAgain);
+        revealBtn.addEventListener('click', doReveal);
+        checkBtn.addEventListener('click', doCheck);
+
+        guessInput.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') doCheck();
+        });
+
+        guessInput.addEventListener('keyup', (e) => {
+            e.stopPropagation();
+        });
+
+        // Keyboard shortcuts - capture phase
+        const SHORTCUTS = { 'N': doNext, 'A': doAgain, 'R': doReveal, 'C': doCheck };
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            const handler = SHORTCUTS[e.key.toUpperCase()];
+            if (handler) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                handler();
+            }
+        }, true);
+
+        // ============================================================
+        // INIT AUDIO
+        // ============================================================
+
+        function initAudio() {
+            log('Loading piano samples...', 'info');
+            TiulPiano.init(
+                function () {
+                    log('Piano loaded. Select key and sample, then press start.', 'heading');
+                    startBtn.disabled = false;
+                },
+                function (e) {
+                    log('Error loading piano: ' + e.message, 'wrong');
+                }
+            );
+        }
+
+        initAudio();
+    })();
+</script>
+</body>
+</html>
