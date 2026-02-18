@@ -191,6 +191,7 @@
         <span>wrong: <span class="val" id="wrongCount">0</span></span>
         <span>tries: <span class="val" id="triesCount">0</span></span>
         <span>grade: <span class="val" id="grade">-</span></span>
+        <button class="cmd-btn" id="toggleLogBtn" type="button">hide log</button>
     </div>
 
     <div class="log" id="log"></div>
@@ -223,9 +224,11 @@
         const triesCountEl = document.getElementById('triesCount');
         const gradeEl = document.getElementById('grade');
         const logDiv = document.getElementById('log');
+        const toggleLogBtn = document.getElementById('toggleLogBtn');
 
         let session = null;
         let pianoReady = false;
+        let logCollapsed = false;
 
         function log(text, cls) {
             const p = document.createElement('p');
@@ -237,6 +240,12 @@
 
         function clearLog() {
             logDiv.innerHTML = '';
+        }
+
+        function setLogCollapsed(collapsed) {
+            logCollapsed = collapsed;
+            logDiv.style.display = collapsed ? 'none' : 'block';
+            toggleLogBtn.textContent = collapsed ? 'show log' : 'hide log';
         }
 
         function setControlsEnabled(enabled) {
@@ -481,6 +490,9 @@
         backBtn.addEventListener('click', doBack);
         checkBtn.addEventListener('click', doCheck);
         quitBtn.addEventListener('click', doQuit);
+        toggleLogBtn.addEventListener('click', function () {
+            setLogCollapsed(!logCollapsed);
+        });
 
         answerInput.addEventListener('keydown', (e) => {
             e.stopPropagation();
@@ -520,6 +532,7 @@
 
         populateKeySelect();
         populateLessonSelect();
+        setLogCollapsed(false);
         initAudio();
     })();
 </script>
