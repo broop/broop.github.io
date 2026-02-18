@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Play Check</title>
+    <style>
+        :root {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a2e;
+            color: #c8d6e5;
+        }
+
+        .terminal {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 16px 20px;
+        }
+
+        .header {
+            color: #00d2d3;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .config-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+
+        .config-row label { color: #778ca3; }
+
+        .config-row select {
+            font-family: inherit;
+            font-size: 13px;
+            background: #0f0f23;
+            color: #c8d6e5;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 3px 6px;
+        }
+
+        .config-row select:focus { outline: 1px solid #00d2d3; }
+
+        .cmd-btn {
+            font-family: inherit;
+            font-size: 13px;
+            background: #0f0f23;
+            color: #c8d6e5;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background 0.1s, border-color 0.1s;
+        }
+
+        .cmd-btn:hover {
+            background: #1e1e3a;
+            border-color: #00d2d3;
+        }
+
+        .cmd-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .cmd-btn .key { color: #feca57; }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 10px 0;
+            font-size: 14px;
+            flex-wrap: wrap;
+        }
+
+        .status-row .strong { font-weight: 700; color: #54a0ff; }
+        .status-row .right { color: #2ed573; font-weight: 700; }
+        .status-row .wrong { color: #ff6b6b; font-weight: 700; }
+
+        .commands {
+            display: flex;
+            gap: 6px;
+            margin: 8px 0;
+            flex-wrap: wrap;
+        }
+
+        .answer-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
+        .answer-row input {
+            font-family: inherit;
+            font-size: 14px;
+            background: #0f0f23;
+            color: #c8d6e5;
+            border: 1px solid #334;
+            border-radius: 4px;
+            padding: 5px 10px;
+            width: 80px;
+            text-transform: uppercase;
+        }
+
+        .answer-row input:focus { outline: 1px solid #00d2d3; }
+
+        .prompt { color: #feca57; }
+
+        .stats {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #778ca3;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .stats .val { color: #c8d6e5; }
+
+        .log {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #0f0f23;
+            border: 1px solid #222;
+            border-radius: 6px;
+            min-height: 180px;
+            max-height: 420px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .log-line { margin: 0; }
+        .log-line.info { color: #778ca3; }
+        .log-line.note { color: #c8d6e5; }
+        .log-line.correct { color: #2ed573; }
+        .log-line.wrong { color: #ff6b6b; }
+        .log-line.reveal { color: #54a0ff; }
+        .log-line.heading { color: #00d2d3; font-weight: 700; }
+        .log-line.warn { color: #feca57; }
+    </style>
+</head>
+<body>
+<div class="terminal">
+    <div class="header">Play Check</div>
+
+    <div class="config-row">
+        <label>key:</label>
+        <select id="keySelect"></select>
+        <label>lesson:</label>
+        <select id="lessonSelect"></select>
+        <span id="lessonComment" style="color:#778ca3"></span>
+        <button class="cmd-btn" id="startBtn" disabled>start</button>
+        <button class="cmd-btn" id="quitBtn" disabled>[<span class="key">q</span>] quit</button>
+    </div>
+
+    <div class="status-row">
+        <span>progress: <span class="strong" id="progress">0/0</span></span>
+        <span>reveal: <span class="strong" id="revealText"></span></span>
+        <span>result: <span id="resultText"></span></span>
+    </div>
+
+    <div class="answer-row">
+        <span class="prompt">&gt;</span>
+        <input type="text" id="answerInput" maxlength="24" autocomplete="off" disabled/>
+        <button class="cmd-btn" id="checkBtn" disabled>[<span class="key">enter / c</span>] check</button>
+    </div>
+
+    <div class="commands">
+        <button class="cmd-btn" id="playBtn" disabled>[<span class="key">p</span>] play</button>
+        <button class="cmd-btn" id="revealBtn" disabled>[<span class="key">r</span>] reveal</button>
+        <button class="cmd-btn" id="nextBtn" disabled>[<span class="key">n</span>] next</button>
+        <button class="cmd-btn" id="backBtn" disabled>[<span class="key">b</span>] back</button>
+    </div>
+
+    <div class="stats">
+        <span>correct: <span class="val" id="correctCount">0</span></span>
+        <span>wrong: <span class="val" id="wrongCount">0</span></span>
+        <span>tries: <span class="val" id="triesCount">0</span></span>
+        <span>grade: <span class="val" id="grade">-</span></span>
+    </div>
+
+    <div class="log" id="log"></div>
+</div>
+
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="play_check-data.js"></script>
+<script>
+    (function () {
+        const LESSONS = window.PLAY_CHECK_LESSONS || {};
+        const LESSON_COMMENTS = window.PLAY_CHECK_LESSON_COMMENTS || {};
+
+        const keySelect = document.getElementById('keySelect');
+        const lessonSelect = document.getElementById('lessonSelect');
+        const lessonComment = document.getElementById('lessonComment');
+        const startBtn = document.getElementById('startBtn');
+        const quitBtn = document.getElementById('quitBtn');
+        const progressEl = document.getElementById('progress');
+        const revealTextEl = document.getElementById('revealText');
+        const resultTextEl = document.getElementById('resultText');
+        const answerInput = document.getElementById('answerInput');
+        const checkBtn = document.getElementById('checkBtn');
+        const playBtn = document.getElementById('playBtn');
+        const revealBtn = document.getElementById('revealBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const backBtn = document.getElementById('backBtn');
+        const correctCountEl = document.getElementById('correctCount');
+        const wrongCountEl = document.getElementById('wrongCount');
+        const triesCountEl = document.getElementById('triesCount');
+        const gradeEl = document.getElementById('grade');
+        const logDiv = document.getElementById('log');
+
+        let session = null;
+        let pianoReady = false;
+
+        function log(text, cls) {
+            const p = document.createElement('p');
+            p.className = 'log-line ' + (cls || 'note');
+            p.textContent = text;
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            logDiv.innerHTML = '';
+        }
+
+        function setControlsEnabled(enabled) {
+            playBtn.disabled = !enabled;
+            revealBtn.disabled = !enabled;
+            nextBtn.disabled = !enabled;
+            backBtn.disabled = !enabled;
+            checkBtn.disabled = !enabled;
+            answerInput.disabled = !enabled;
+            quitBtn.disabled = !enabled;
+        }
+
+        function updateProgress() {
+            if (!session || !session.pitches.length) {
+                progressEl.textContent = '0/0';
+                return;
+            }
+            progressEl.textContent = (session.currentIndex + 1) + '/' + session.pitches.length;
+        }
+
+        function updateStats() {
+            if (!session) {
+                correctCountEl.textContent = '0';
+                wrongCountEl.textContent = '0';
+                triesCountEl.textContent = '0';
+                gradeEl.textContent = '-';
+                return;
+            }
+            correctCountEl.textContent = String(session.correctCount);
+            wrongCountEl.textContent = String(session.wrongCount);
+            const tries = session.correctCount + session.wrongCount;
+            triesCountEl.textContent = String(tries);
+            gradeEl.textContent = tries > 0 ? ((session.correctCount / tries) * 100).toFixed(1) + '%' : '-';
+        }
+
+        function midiToKeyPitch(key, midiNote) {
+            const keyDegrees = KEY_DEGREES[key];
+            if (!keyDegrees) return '?';
+            const pitchClass = ((midiNote % 12) + 12) % 12;
+            for (let i = 0; i < keyDegrees.length; i++) {
+                const degreePc = ((tiulNameToMidi(keyDegrees[i], 4) % 12) + 12) % 12;
+                if (degreePc === pitchClass) {
+                    return keyDegrees[i];
+                }
+            }
+            return '?';
+        }
+
+        function revealString(item) {
+            if (Array.isArray(item)) {
+                const names = item.map(n => midiToKeyPitch(session.key, n));
+                return '[' + names.join(', ') + ']';
+            }
+            return midiToKeyPitch(session.key, item);
+        }
+
+        function expectedFor(item) {
+            if (Array.isArray(item)) {
+                return item.map(n => midiToKeyPitch(session.key, n).toUpperCase()).join('');
+            }
+            return midiToKeyPitch(session.key, item).toUpperCase();
+        }
+
+        function clearRevealAndResult() {
+            revealTextEl.textContent = '';
+            resultTextEl.textContent = '';
+            resultTextEl.className = '';
+        }
+
+        function showResult(isCorrect) {
+            if (isCorrect) {
+                resultTextEl.textContent = 'RIGHT';
+                resultTextEl.className = 'right';
+            } else {
+                resultTextEl.textContent = 'WRONG';
+                resultTextEl.className = 'wrong';
+            }
+        }
+
+        function playItem(item) {
+            if (!pianoReady) {
+                log('Piano not loaded yet.', 'warn');
+                return;
+            }
+            TiulPiano.stopAll();
+            if (Array.isArray(item)) {
+                TiulPiano.playChord(item, 0.5);
+            } else {
+                TiulPiano.play(item, 0.75);
+            }
+        }
+
+        function currentItem() {
+            return session && session.pitches[session.currentIndex];
+        }
+
+        function doPlay() {
+            if (!session || !session.started) return;
+            clearRevealAndResult();
+            playItem(currentItem());
+        }
+
+        function doReveal() {
+            if (!session || !session.started) return;
+            resultTextEl.textContent = '';
+            const text = revealString(currentItem());
+            revealTextEl.textContent = text;
+            log('Reveal: ' + text, 'reveal');
+        }
+
+        function doNext() {
+            if (!session || !session.started) return;
+            if (session.currentIndex + 1 < session.pitches.length) {
+                session.currentIndex += 1;
+            }
+            answerInput.value = '';
+            clearRevealAndResult();
+            updateProgress();
+            playItem(currentItem());
+            answerInput.focus();
+        }
+
+        function doBack() {
+            if (!session || !session.started) return;
+            if (session.currentIndex > 0) {
+                session.currentIndex -= 1;
+            }
+            clearRevealAndResult();
+            updateProgress();
+            playItem(currentItem());
+        }
+
+        function doCheck() {
+            if (!session || !session.started) return;
+            const entered = answerInput.value.trim().toUpperCase();
+            if (!entered) return;
+
+            const expected = expectedFor(currentItem());
+            const normalized = entered.replace(/[,\s]/g, '');
+            const isCorrect = normalized === expected;
+
+            if (isCorrect) session.correctCount += 1;
+            else session.wrongCount += 1;
+
+            showResult(isCorrect);
+            log((isCorrect ? 'RIGHT' : 'WRONG') + ' | expected: ' + expected + ' | got: ' + normalized, isCorrect ? 'correct' : 'wrong');
+            updateStats();
+            answerInput.blur();
+        }
+
+        function doQuit() {
+            if (!session || !session.started) return;
+            const tries = session.correctCount + session.wrongCount;
+            const notesPlayed = session.currentIndex + 1;
+            log('--- Session End ---', 'heading');
+            log('Notes played: ' + notesPlayed + '/' + session.pitches.length, 'info');
+            log('Total tries: ' + tries, 'info');
+            if (tries > 0) {
+                log('Grade: ' + ((session.correctCount / tries) * 100).toFixed(1) + '%', 'info');
+            }
+
+            session.started = false;
+            setControlsEnabled(false);
+            answerInput.value = '';
+            clearRevealAndResult();
+            TiulPiano.stopAll();
+        }
+
+        function createSession(key, lesson) {
+            const pitches = LESSONS[key][lesson] || [];
+            return {
+                key,
+                lesson,
+                pitches,
+                currentIndex: 0,
+                correctCount: 0,
+                wrongCount: 0,
+                started: true
+            };
+        }
+
+        function populateKeySelect() {
+            const keys = KEY_ORDER.filter(k => Object.prototype.hasOwnProperty.call(LESSONS, k));
+            keys.forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.textContent = k.replace('-', 'b');
+                keySelect.appendChild(opt);
+            });
+            keySelect.value = 'G';
+        }
+
+        function populateLessonSelect() {
+            const key = keySelect.value;
+            lessonSelect.innerHTML = '';
+            const lessonIds = Object.keys(LESSONS[key]).map(Number).sort((a, b) => a - b);
+            lessonIds.forEach(n => {
+                const opt = document.createElement('option');
+                opt.value = String(n);
+                opt.textContent = String(n);
+                lessonSelect.appendChild(opt);
+            });
+            lessonSelect.value = '2';
+            updateLessonComment();
+        }
+
+        function updateLessonComment() {
+            const lesson = Number(lessonSelect.value);
+            lessonComment.textContent = LESSON_COMMENTS[lesson] ? '(' + LESSON_COMMENTS[lesson] + ')' : '';
+        }
+
+        function doStart() {
+            if (!pianoReady) {
+                log('Piano not loaded yet.', 'warn');
+                return;
+            }
+            const key = keySelect.value;
+            const lesson = String(parseInt(lessonSelect.value, 10));
+            session = createSession(key, lesson);
+            clearLog();
+            clearRevealAndResult();
+            answerInput.value = '';
+            updateProgress();
+            updateStats();
+            setControlsEnabled(true);
+
+            const comment = LESSON_COMMENTS[Number(lesson)] || '';
+            log('Playing lesson ' + lesson + ' in ' + key + ' major' + (comment ? ' (' + comment + ')' : ''), 'heading');
+            log('Commands: p=play, r=reveal, n=next, b=back, q=quit', 'info');
+
+            playItem(currentItem());
+            answerInput.focus();
+        }
+
+        keySelect.addEventListener('change', populateLessonSelect);
+        lessonSelect.addEventListener('change', updateLessonComment);
+
+        startBtn.addEventListener('click', doStart);
+        playBtn.addEventListener('click', doPlay);
+        revealBtn.addEventListener('click', doReveal);
+        nextBtn.addEventListener('click', doNext);
+        backBtn.addEventListener('click', doBack);
+        checkBtn.addEventListener('click', doCheck);
+        quitBtn.addEventListener('click', doQuit);
+
+        answerInput.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') doCheck();
+        });
+
+        const SHORTCUTS = {
+            P: doPlay,
+            R: doReveal,
+            N: doNext,
+            B: doBack,
+            Q: doQuit,
+            C: doCheck
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            const handler = SHORTCUTS[e.key.toUpperCase()];
+            if (!handler) return;
+            e.preventDefault();
+            handler();
+        }, true);
+
+        function initAudio() {
+            log('Loading piano samples...', 'info');
+            TiulPiano.init(
+                function () {
+                    pianoReady = true;
+                    startBtn.disabled = false;
+                    log('Piano loaded. Press start.', 'heading');
+                },
+                function (e) {
+                    log('Error loading piano: ' + e.message, 'wrong');
+                }
+            );
+        }
+
+        populateKeySelect();
+        populateLessonSelect();
+        initAudio();
+    })();
+</script>
+</body>
+</html>
