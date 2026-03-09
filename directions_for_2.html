@@ -230,6 +230,8 @@
         <button id="prevBtn" disabled>Prev <span class="shortcut">(A)</span></button>
         <button id="playBtn" class="play-btn" disabled>Play Pair <span class="shortcut">(P)</span></button>
         <button id="nextBtn" disabled>Next <span class="shortcut">(N)</span></button>
+        <button id="melodicBtn" disabled>Melodic &#x2191; <span class="shortcut">(M)</span></button>
+        <button id="melodicDownBtn" disabled>Melodic &#x2193; <span class="shortcut">(L)</span></button>
         <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
         <span id="revealDisplay" class="reveal-inline"></span>
     </div>
@@ -266,7 +268,7 @@
     <div id="status" class="status">Loading piano samples...</div>
 
     <div class="hint">
-        Shortcuts: <b>N</b>=Next (plays current then new), <b>P</b>=Play pair again, <b>A</b>=Prev chord only,
+        Shortcuts: <b>N</b>=Next (plays current then new), <b>P</b>=Play pair again, <b>M</b>=Melodic&uarr;, <b>L</b>=Melodic&darr;, <b>A</b>=Prev chord only,
         <b>R</b>=Reveal, <b>C</b>=Check.
         Click or use keyboard: <b>U</b>=up, <b>S</b>=same, <b>D</b>=down (fills bass first, then soprano). <b>Tab</b> switches voice.
     </div>
@@ -286,6 +288,8 @@
         const prevBtn = document.getElementById('prevBtn');
         const playBtn = document.getElementById('playBtn');
         const nextBtn = document.getElementById('nextBtn');
+        const melodicBtn = document.getElementById('melodicBtn');
+        const melodicDownBtn = document.getElementById('melodicDownBtn');
         const revealBtn = document.getElementById('revealBtn');
         const revealDisplay = document.getElementById('revealDisplay');
         const checkBtn = document.getElementById('checkBtn');
@@ -527,10 +531,55 @@
                 playChordPair(session, session.previousMidi);
                 setTimeout(() => {
                     playChordPair(session, session.currentMidi);
-                }, 600);
+                }, 900);
             } else {
                 playChordPair(session, session.currentMidi);
             }
+        }
+
+        function playMelodicUp(m1, m2, dur, gap) {
+            // bass -> soprano
+            TiulPiano.play(m1, dur);
+            setTimeout(() => TiulPiano.play(m2, dur), gap);
+        }
+
+        function doMelodic() {
+            if (!session || !TiulPiano.isReady()) return;
+            var dur = 1.2, gap = 350;
+            if (!session.previousMidi) {
+                const [m1, m2] = ensureSecondHigher(session.currentMidi[0], session.currentMidi[1]);
+                TiulPiano.stopAll();
+                playMelodicUp(m1, m2, dur, gap);
+                return;
+            }
+            const [p1, p2] = ensureSecondHigher(session.previousMidi[0], session.previousMidi[1]);
+            const [c1, c2] = ensureSecondHigher(session.currentMidi[0], session.currentMidi[1]);
+            TiulPiano.stopAll();
+            playMelodicUp(p1, p2, dur, gap);
+            setTimeout(() => {
+                playMelodicUp(c1, c2, dur, gap);
+            }, gap * 2 + 500);
+        }
+
+        function doMelodicDown() {
+            if (!session || !TiulPiano.isReady()) return;
+            var dur = 1.2, gap = 350;
+            if (!session.previousMidi) {
+                const [m1, m2] = ensureSecondHigher(session.currentMidi[0], session.currentMidi[1]);
+                TiulPiano.stopAll();
+                TiulPiano.play(m2, dur);
+                setTimeout(() => TiulPiano.play(m1, dur), gap);
+                return;
+            }
+            const [p1, p2] = ensureSecondHigher(session.previousMidi[0], session.previousMidi[1]);
+            const [c1, c2] = ensureSecondHigher(session.currentMidi[0], session.currentMidi[1]);
+            TiulPiano.stopAll();
+            TiulPiano.play(p2, dur);
+            setTimeout(() => TiulPiano.play(p1, dur), gap);
+            setTimeout(() => {
+                TiulPiano.play(c2, dur);
+                setTimeout(() => TiulPiano.play(c1, dur), gap);
+            }, gap * 2 + 500);
         }
 
         function doNext() {
@@ -539,14 +588,14 @@
             clearDirButtons();
             activeVoice = 'bass';
 
-            // Play current (becomes previous), then after delay advance and play new
+            // Play current (becomes previous), then after 1s advance and play new
             playCurrentChord(session);
             setTimeout(() => {
                 getNextChord(session);
                 playCurrentChord(session);
                 promptLabel.textContent = 'What moved? (Bass / Soprano: up, same, down)';
                 updateStats();
-            }, 600);
+            }, 1200);
         }
 
         function doReveal() {
@@ -618,21 +667,24 @@
         prevBtn.addEventListener('click', doPrev);
         playBtn.addEventListener('click', doPlay);
         nextBtn.addEventListener('click', doNext);
+        melodicBtn.addEventListener('click', doMelodic);
+        melodicDownBtn.addEventListener('click', doMelodicDown);
         revealBtn.addEventListener('click', doReveal);
         checkBtn.addEventListener('click', doCheck);
 
         keySelect.addEventListener('change', () => {
             session = createSession(keySelect.value);
+            getNextChord(session);
             clearFeedback();
             clearDirButtons();
-            promptLabel.textContent = 'Press Next to start';
+            promptLabel.textContent = 'What moved? (Bass / Soprano: up, same, down)';
             titleEl.textContent = 'Directions for 2 - Key of ' + session.key;
             updateStats();
             setStatus('Key changed to ' + session.key + '. Press Next.');
         });
 
         // Keyboard shortcuts - capture phase
-        const CMD_SHORTCUTS = { 'P': doPlay, 'N': doNext, 'R': doReveal, 'A': doPrev, 'C': doCheck };
+        const CMD_SHORTCUTS = { 'P': doPlay, 'N': doNext, 'M': doMelodic, 'L': doMelodicDown, 'R': doReveal, 'A': doPrev, 'C': doCheck };
         const DIR_MAP = { 'U': 'up', 'D': 'down', 'S': 'same' };
 
         document.addEventListener('keydown', (e) => {
@@ -675,7 +727,9 @@
                     prevBtn.disabled = false;
                     playBtn.disabled = false;
                     nextBtn.disabled = false;
-                    setStatus('Ready! Press Next to hear the first transition.');
+                    melodicBtn.disabled = false;
+                    melodicDownBtn.disabled = false;
+                    setStatus('Ready! Press Play to hear the first pair.');
                 },
                 function (e) {
                     setStatus('Error loading piano: ' + e.message);
@@ -684,7 +738,9 @@
         }
 
         session = createSession('C');
+        getNextChord(session);
         titleEl.textContent = 'Directions for 2 - Key of ' + session.key;
+        promptLabel.textContent = 'What moved? (Bass / Soprano: up, same, down)';
         updateStats();
         initAudio();
     })();
