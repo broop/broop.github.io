@@ -130,27 +130,16 @@
 
         .stats .val { color: #c8d6e5; }
 
-        .log {
+        .status-msg {
             margin-top: 10px;
-            padding: 10px 12px;
-            background: #0f0f23;
-            border: 1px solid #222;
-            border-radius: 6px;
-            min-height: 180px;
-            max-height: 420px;
-            overflow-y: auto;
             font-size: 13px;
-            line-height: 1.6;
+            min-height: 1.4em;
         }
 
-        .log-line { margin: 0; }
-        .log-line.info { color: #778ca3; }
-        .log-line.note { color: #c8d6e5; }
-        .log-line.correct { color: #2ed573; }
-        .log-line.wrong { color: #ff6b6b; }
-        .log-line.reveal { color: #54a0ff; }
-        .log-line.heading { color: #00d2d3; font-weight: 700; }
-        .log-line.warn { color: #feca57; }
+        .status-msg.info { color: #778ca3; }
+        .status-msg.warn { color: #feca57; }
+        .status-msg.heading { color: #00d2d3; font-weight: 700; }
+        .status-msg.wrong { color: #ff6b6b; }
     </style>
 </head>
 <body>
@@ -163,6 +152,13 @@
         <label>lesson:</label>
         <select id="lessonSelect"></select>
         <span id="lessonComment" style="color:#778ca3"></span>
+        <label>notes:</label>
+        <select id="notesSelect">
+            <option value="all">all</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+        </select>
         <button class="cmd-btn" id="startBtn" disabled>start</button>
         <button class="cmd-btn" id="quitBtn" disabled>[<span class="key">q</span>] quit</button>
     </div>
@@ -191,10 +187,9 @@
         <span>wrong: <span class="val" id="wrongCount">0</span></span>
         <span>tries: <span class="val" id="triesCount">0</span></span>
         <span>grade: <span class="val" id="grade">-</span></span>
-        <button class="cmd-btn" id="toggleLogBtn" type="button">hide log</button>
     </div>
 
-    <div class="log" id="log"></div>
+    <div class="status-msg info" id="statusMsg"></div>
 </div>
 
 <script src="tiul-constants.js"></script>
@@ -207,6 +202,7 @@
 
         const keySelect = document.getElementById('keySelect');
         const lessonSelect = document.getElementById('lessonSelect');
+        const notesSelect = document.getElementById('notesSelect');
         const lessonComment = document.getElementById('lessonComment');
         const startBtn = document.getElementById('startBtn');
         const quitBtn = document.getElementById('quitBtn');
@@ -223,29 +219,19 @@
         const wrongCountEl = document.getElementById('wrongCount');
         const triesCountEl = document.getElementById('triesCount');
         const gradeEl = document.getElementById('grade');
-        const logDiv = document.getElementById('log');
-        const toggleLogBtn = document.getElementById('toggleLogBtn');
+        const statusMsgEl = document.getElementById('statusMsg');
 
         let session = null;
         let pianoReady = false;
-        let logCollapsed = false;
 
-        function log(text, cls) {
-            const p = document.createElement('p');
-            p.className = 'log-line ' + (cls || 'note');
-            p.textContent = text;
-            logDiv.appendChild(p);
-            logDiv.scrollTop = logDiv.scrollHeight;
+        function setStatus(text, cls) {
+            statusMsgEl.textContent = text;
+            statusMsgEl.className = 'status-msg ' + (cls || 'info');
         }
 
-        function clearLog() {
-            logDiv.innerHTML = '';
-        }
-
-        function setLogCollapsed(collapsed) {
-            logCollapsed = collapsed;
-            logDiv.style.display = collapsed ? 'none' : 'block';
-            toggleLogBtn.textContent = collapsed ? 'show log' : 'hide log';
+        function clearStatus() {
+            statusMsgEl.textContent = '';
+            statusMsgEl.className = 'status-msg info';
         }
 
         function setControlsEnabled(enabled) {
@@ -327,7 +313,7 @@
 
         function playItem(item) {
             if (!pianoReady) {
-                log('Piano not loaded yet.', 'warn');
+                setStatus('Piano not loaded yet.', 'warn');
                 return;
             }
             TiulPiano.stopAll();
@@ -353,7 +339,6 @@
             resultTextEl.textContent = '';
             const text = revealString(currentItem());
             revealTextEl.textContent = text;
-            log('Reveal: ' + text, 'reveal');
         }
 
         function doNext() {
@@ -391,34 +376,37 @@
             else session.wrongCount += 1;
 
             showResult(isCorrect);
-            log((isCorrect ? 'RIGHT' : 'WRONG') + ' | expected: ' + expected + ' | got: ' + normalized, isCorrect ? 'correct' : 'wrong');
             updateStats();
             answerInput.blur();
         }
 
         function doQuit() {
             if (!session || !session.started) return;
-            const tries = session.correctCount + session.wrongCount;
-            const notesPlayed = session.currentIndex + 1;
-            log('--- Session End ---', 'heading');
-            log('Notes played: ' + notesPlayed + '/' + session.pitches.length, 'info');
-            log('Total tries: ' + tries, 'info');
-            if (tries > 0) {
-                log('Grade: ' + ((session.correctCount / tries) * 100).toFixed(1) + '%', 'info');
-            }
-
             session.started = false;
             setControlsEnabled(false);
             answerInput.value = '';
             clearRevealAndResult();
             TiulPiano.stopAll();
+            setStatus('Session ended.', 'info');
         }
 
-        function createSession(key, lesson) {
-            const pitches = LESSONS[key][lesson] || [];
+        function itemSize(item) {
+            return Array.isArray(item) ? item.length : 1;
+        }
+
+        function filterPitchesByNotes(pitches, notesMode) {
+            if (notesMode === 'all') return pitches.slice();
+            const want = parseInt(notesMode, 10);
+            return pitches.filter(p => itemSize(p) === want);
+        }
+
+        function createSession(key, lesson, notesMode) {
+            const all = LESSONS[key][lesson] || [];
+            const pitches = filterPitchesByNotes(all, notesMode);
             return {
                 key,
                 lesson,
+                notesMode,
                 pitches,
                 currentIndex: 0,
                 correctCount: 0,
@@ -459,23 +447,28 @@
 
         function doStart() {
             if (!pianoReady) {
-                log('Piano not loaded yet.', 'warn');
+                setStatus('Piano not loaded yet.', 'warn');
                 return;
             }
             const key = keySelect.value;
             const lesson = String(parseInt(lessonSelect.value, 10));
-            session = createSession(key, lesson);
-            clearLog();
+            const notesMode = notesSelect.value;
+            session = createSession(key, lesson, notesMode);
+            clearStatus();
             clearRevealAndResult();
             answerInput.value = '';
             updateProgress();
             updateStats();
+
+            if (!session.pitches.length) {
+                const label = notesMode === 'all' ? 'any size' : notesMode + '-note';
+                setStatus('No ' + label + ' items in lesson ' + lesson + ' (' + key + ' major).', 'warn');
+                session.started = false;
+                setControlsEnabled(false);
+                return;
+            }
+
             setControlsEnabled(true);
-
-            const comment = LESSON_COMMENTS[Number(lesson)] || '';
-            log('Playing lesson ' + lesson + ' in ' + key + ' major' + (comment ? ' (' + comment + ')' : ''), 'heading');
-            log('Commands: p=play, r=reveal, n=next, b=back, q=quit', 'info');
-
             playItem(currentItem());
             answerInput.focus();
         }
@@ -490,9 +483,6 @@
         backBtn.addEventListener('click', doBack);
         checkBtn.addEventListener('click', doCheck);
         quitBtn.addEventListener('click', doQuit);
-        toggleLogBtn.addEventListener('click', function () {
-            setLogCollapsed(!logCollapsed);
-        });
 
         answerInput.addEventListener('keydown', (e) => {
             e.stopPropagation();
@@ -517,22 +507,21 @@
         }, true);
 
         function initAudio() {
-            log('Loading piano samples...', 'info');
+            setStatus('Loading piano samples...', 'info');
             TiulPiano.init(
                 function () {
                     pianoReady = true;
                     startBtn.disabled = false;
-                    log('Piano loaded. Press start.', 'heading');
+                    setStatus('Piano loaded. Press start.', 'heading');
                 },
                 function (e) {
-                    log('Error loading piano: ' + e.message, 'wrong');
+                    setStatus('Error loading piano: ' + e.message, 'wrong');
                 }
             );
         }
 
         populateKeySelect();
         populateLessonSelect();
-        setLogCollapsed(false);
         initAudio();
     })();
 </script>
