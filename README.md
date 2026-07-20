@@ -1,8 +1,10 @@
 - <a href="https://broop.github.io/tiul.html" target="_blank">Tiul - Ear Training</a>
 - <a href="https://broop.github.io/reverse_tiul.html" target="_blank">Reverse Tiul - Markov Ear Training</a>
 
+- <a href="https://broop.github.io/chromatic_clusters.html" target="_blank">Chromatic Clusters - Ear Training</a>
 - <a href="https://broop.github.io/chord_colors.html" target="_blank">Chord Colors - Ear Training</a>
 - <a href="https://broop.github.io/clefs.html" target="_blank">Clef Trainer (Single Note)</a>
+- <a href="https://broop.github.io/mode_sig.html" target="_blank">Modal Key Signature Trainer</a>
 - <a href="https://broop.github.io/directions_for_2.html" target="_blank">Directions for 2 - Movement Ear Training</a>
 - <a href="https://broop.github.io/directions_for_2_v2.html" target="_blank">Directions for 2 v2 - Movement Ear Training (React)</a>
 - <a href="https://broop.github.io/play_check.html" target="_blank">Play Check</a>

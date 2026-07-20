@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Chromatic Clusters - Ear Training</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        body {
+            margin: 24px;
+            background: #f6f7f9;
+            color: #111;
+        }
+
+        .card {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 20px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .row + .row {
+            margin-top: 14px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        select, input[type="text"] {
+            font-size: 14px;
+            padding: 8px 12px;
+            border: 1px solid #cfd6e4;
+            border-radius: 10px;
+            min-width: 100px;
+        }
+
+        select:focus-visible, input:focus-visible {
+            outline: 2px solid #4a7aed;
+            outline-offset: 1px;
+        }
+
+        button {
+            font-size: 14px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid #cfd6e4;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #f0f3f8;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .play-btn {
+            background: #4a7aed;
+            color: #fff;
+            border-color: #4a7aed;
+        }
+
+        .play-btn:hover:not(:disabled) {
+            background: #3a66d4;
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #555;
+            min-height: 20px;
+        }
+
+        .reveal-display {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2563eb;
+            min-width: 60px;
+            padding: 0 8px;
+            align-self: center;
+        }
+
+        .feedback {
+            margin-top: 12px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            min-height: 24px;
+        }
+
+        .feedback.success {
+            color: #16a34a;
+        }
+
+        .feedback.error {
+            color: #dc2626;
+        }
+
+        .feedback.info {
+            color: #2563eb;
+        }
+
+        .stats {
+            margin-top: 12px;
+            display: flex;
+            gap: 18px;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .stats span {
+            padding: 4px 10px;
+            background: #f8f9fb;
+            border-radius: 8px;
+        }
+
+        .guess-input {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            min-width: 260px;
+        }
+
+        .hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .test-mode-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .test-mode-label input {
+            cursor: pointer;
+        }
+
+        .shortcut {
+            font-size: 11px;
+            color: #999;
+            margin-left: 2px;
+        }
+
+        #keyboard {
+            margin-top: 18px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e5e9f2;
+        }
+
+        .keyboard-label {
+            margin-top: 18px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1 id="title">Chromatic Clusters - Ear Training</h1>
+
+    <div class="row">
+        <label>
+            Tones
+            <select id="toneSelect"></select>
+        </label>
+
+        <label>
+            Guess direction
+            <select id="directionSelect">
+                <option value="up">Bottom &#8594; Top</option>
+                <option value="down">Top &#8594; Bottom</option>
+                <option value="any">Either</option>
+            </select>
+        </label>
+
+        <label class="test-mode-label">
+            <input type="checkbox" id="testMode"/> TEST MODE
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play Chord <span class="shortcut">(P)</span></button>
+        <button id="upBtn">Melody Up <span class="shortcut">(U)</span></button>
+        <button id="downBtn">Melody Down <span class="shortcut">(D)</span></button>
+    </div>
+
+    <div class="row">
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <button id="lowBtn">Lowest <span class="shortcut">(L)</span></button>
+        <button id="highBtn">Highest <span class="shortcut">(H)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div class="row">
+        <label>
+            Your guess (all notes, in the chosen direction)
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. C E- G B" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+        <span>Tones: <span id="toneCount">2</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Keyboard shortcuts: <b>P</b>=Play chord, <b>U</b>=Melody up, <b>D</b>=Melody down, <b>N</b>=Next, <b>R</b>=Reveal,
+        <b>L</b>=Lowest note, <b>H</b>=Highest note.
+        Enter all note names separated by spaces or commas (no octaves). Accepts # for sharp, - or b for flat;
+        enharmonic spellings are accepted (D# = Eb). Clusters are in closed position (within one octave).
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+
+<script>
+    (function () {
+        // ============================================================
+        // APP-SPECIFIC CONFIG
+        // ============================================================
+
+        const CONFIG = {
+            MIN_TONES: 2,
+            MAX_TONES: 12,
+            DEFAULT_TONES: 2,
+            BOTTOM_MIDI_MIN: 48,  // C3
+            BOTTOM_MIDI_MAX: 71,  // B4 (top of cluster stays <= B5)
+            CHORD_DURATION: 3.0,
+            MELODY_NOTE_DURATION: 0.8,
+            MELODY_STEP_MS: 550
+        };
+
+        // ============================================================
+        // DOM ELEMENTS
+        // ============================================================
+
+        const toneSelect = document.getElementById('toneSelect');
+        const directionSelect = document.getElementById('directionSelect');
+        const testModeCheck = document.getElementById('testMode');
+        const playBtn = document.getElementById('playBtn');
+        const upBtn = document.getElementById('upBtn');
+        const downBtn = document.getElementById('downBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const revealBtn = document.getElementById('revealBtn');
+        const lowBtn = document.getElementById('lowBtn');
+        const highBtn = document.getElementById('highBtn');
+        const checkBtn = document.getElementById('checkBtn');
+        const guessInput = document.getElementById('guessInput');
+        const revealDisplay = document.getElementById('revealDisplay');
+        const feedbackDiv = document.getElementById('feedback');
+        const statusDiv = document.getElementById('status');
+        const correctCountEl = document.getElementById('correctCount');
+        const wrongCountEl = document.getElementById('wrongCount');
+        const playedCountEl = document.getElementById('playedCount');
+        const toneCountEl = document.getElementById('toneCount');
+
+        // ============================================================
+        // SESSION STATE
+        // ============================================================
+
+        let session = {
+            tones: CONFIG.DEFAULT_TONES,
+            currentMidis: [],   // sorted bottom -> top
+            playedCount: 0,
+            correctCount: 0,
+            wrongCount: 0
+        };
+
+        let melodyTimers = [];
+        let keyboardStops = {};
+
+        // ============================================================
+        // CLUSTER GENERATION
+        // ============================================================
+
+        // Pick n distinct semitone offsets within one octave (closed form),
+        // always including 0 so the bottom note anchors the cluster.
+        function randomOffsets(n) {
+            const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            const offsets = [0].concat(pool.slice(0, n - 1));
+            offsets.sort((a, b) => a - b);
+            return offsets;
+        }
+
+        function generateCluster() {
+            const offsets = randomOffsets(session.tones);
+            const range = CONFIG.BOTTOM_MIDI_MAX - CONFIG.BOTTOM_MIDI_MIN + 1;
+            const bottom = CONFIG.BOTTOM_MIDI_MIN + Math.floor(Math.random() * range);
+            session.currentMidis = offsets.map(o => bottom + o);
+        }
+
+        function clusterNames() {
+            return session.currentMidis.map(m => midiToSoundfontName(m));
+        }
+
+        // ============================================================
+        // PLAYBACK
+        // ============================================================
+
+        function stopMelody() {
+            melodyTimers.forEach(t => clearTimeout(t));
+            melodyTimers = [];
+        }
+
+        function playChordNow() {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            if (session.currentMidis.length === 0) return;
+            stopMelody();
+            TiulPiano.stopAll();
+            TiulPiano.playChord(session.currentMidis, CONFIG.CHORD_DURATION);
+            session.playedCount++;
+            updateUI();
+        }
+
+        function playMelody(midis) {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            if (midis.length === 0) return;
+            stopMelody();
+            TiulPiano.stopAll();
+            midis.forEach((midi, i) => {
+                melodyTimers.push(setTimeout(() => {
+                    TiulPiano.play(midi, CONFIG.MELODY_NOTE_DURATION);
+                }, i * CONFIG.MELODY_STEP_MS));
+            });
+            session.playedCount++;
+            updateUI();
+        }
+
+        function playMelodyUp() {
+            playMelody(session.currentMidis);
+        }
+
+        function playMelodyDown() {
+            playMelody(session.currentMidis.slice().reverse());
+        }
+
+        // ============================================================
+        // GUESS PARSING & CHECKING
+        // ============================================================
+
+        // Parse one token like "C", "F#", "E-", "Eb" -> pitch class 0-11, or null
+        function tokenToPitchClass(token) {
+            const m = /^([A-Ga-g])([#bB\-]*)$/.exec(token);
+            if (!m) return null;
+            let pc = LETTER_TO_SEMITONE[m[1].toUpperCase()];
+            for (const ch of m[2]) {
+                if (ch === '#') pc++;
+                else pc--;
+            }
+            return ((pc % 12) + 12) % 12;
+        }
+
+        // Returns { pcs: [...] } or { error: 'bad token' }
+        function parseGuess(raw) {
+            const tokens = (raw || '').trim().split(/[\s,]+/).filter(t => t.length > 0);
+            if (tokens.length === 0) return { error: 'Please enter your guess! (e.g. C E- G)' };
+            const pcs = [];
+            for (const t of tokens) {
+                const pc = tokenToPitchClass(t);
+                if (pc === null) return { error: 'Could not read "' + t + '". Use names like C, F#, E- or Eb.' };
+                pcs.push(pc);
+            }
+            return { pcs: pcs };
+        }
+
+        function arraysEqual(a, b) {
+            return a.length === b.length && a.every((v, i) => v === b[i]);
+        }
+
+        function countSetMatches(guessPcs, actualPcs) {
+            const remaining = actualPcs.slice();
+            let matches = 0;
+            guessPcs.forEach(pc => {
+                const idx = remaining.indexOf(pc);
+                if (idx !== -1) {
+                    remaining.splice(idx, 1);
+                    matches++;
+                }
+            });
+            return matches;
+        }
+
+        function checkAnswer(raw) {
+            if (session.currentMidis.length === 0) {
+                return { correct: false, message: 'No cluster played yet! Press Next.' };
+            }
+            const parsed = parseGuess(raw);
+            if (parsed.error) return { correct: false, message: parsed.error, noCount: true };
+
+            const actualUp = session.currentMidis.map(m => ((m % 12) + 12) % 12);
+            const actualDown = actualUp.slice().reverse();
+
+            if (parsed.pcs.length !== actualUp.length) {
+                return {
+                    correct: false,
+                    message: 'You entered ' + parsed.pcs.length + ' notes but the cluster has ' + actualUp.length + '.',
+                    noCount: true
+                };
+            }
+
+            const direction = directionSelect.value;
+            const upOk = arraysEqual(parsed.pcs, actualUp);
+            const downOk = arraysEqual(parsed.pcs, actualDown);
+
+            if ((direction === 'up' && upOk) ||
+                (direction === 'down' && downOk) ||
+                (direction === 'any' && (upOk || downOk))) {
+                session.correctCount++;
+                const dirLabel = upOk ? 'bottom→top' : 'top→bottom';
+                return { correct: true, message: 'Correct! (' + dirLabel + ')' };
+            }
+
+            session.wrongCount++;
+
+            if (upOk || downOk) {
+                return { correct: false, message: 'Right notes, but in the wrong direction for this setting!' };
+            }
+
+            const matches = countSetMatches(parsed.pcs, actualUp);
+            if (matches === actualUp.length) {
+                return { correct: false, message: 'All ' + matches + ' notes are right, but the order is wrong!' };
+            }
+            return { correct: false, message: 'Wrong. ' + matches + ' of ' + actualUp.length + ' notes are in the cluster. Try again!' };
+        }
+
+        // ============================================================
+        // UI UPDATES
+        // ============================================================
+
+        function setStatus(msg) { statusDiv.textContent = msg; }
+
+        function setFeedback(msg, type) {
+            feedbackDiv.textContent = msg;
+            feedbackDiv.className = 'feedback ' + (type || '');
+        }
+
+        function clearFeedback() {
+            feedbackDiv.textContent = '';
+            feedbackDiv.className = 'feedback';
+            revealDisplay.textContent = '';
+            guessInput.value = '';
+        }
+
+        function updateUI() {
+            correctCountEl.textContent = session.correctCount;
+            wrongCountEl.textContent = session.wrongCount;
+            playedCountEl.textContent = session.playedCount;
+            toneCountEl.textContent = session.tones;
+        }
+
+        // ============================================================
+        // ACTIONS
+        // ============================================================
+
+        function doNext() {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            clearFeedback();
+            generateCluster();
+            playChordNow();
+            if (testModeCheck.checked) {
+                guessInput.focus();
+            }
+        }
+
+        function doReveal() {
+            if (session.currentMidis.length === 0) {
+                setFeedback('No cluster played yet!', 'error');
+                return;
+            }
+            revealDisplay.textContent = clusterNames().join(' ') + ' (bottom→top)';
+        }
+
+        function doShowLow() {
+            if (session.currentMidis.length === 0) {
+                setFeedback('No cluster played yet!', 'error');
+                return;
+            }
+            revealDisplay.textContent = 'Lowest: ' + midiToSoundfontName(session.currentMidis[0]);
+        }
+
+        function doShowHigh() {
+            if (session.currentMidis.length === 0) {
+                setFeedback('No cluster played yet!', 'error');
+                return;
+            }
+            revealDisplay.textContent = 'Highest: ' + midiToSoundfontName(session.currentMidis[session.currentMidis.length - 1]);
+        }
+
+        function doCheck() {
+            const result = checkAnswer(guessInput.value);
+            setFeedback(result.message, result.correct ? 'success' : 'error');
+            guessInput.value = '';
+            guessInput.blur();
+            updateUI();
+        }
+
+        // ============================================================
+        // POPULATE TONE SELECT
+        // ============================================================
+
+        for (let n = CONFIG.MIN_TONES; n <= CONFIG.MAX_TONES; n++) {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            toneSelect.appendChild(opt);
+        }
+        toneSelect.value = CONFIG.DEFAULT_TONES;
+
+        // ============================================================
+        // EVENT LISTENERS
+        // ============================================================
+
+        playBtn.addEventListener('click', playChordNow);
+        upBtn.addEventListener('click', playMelodyUp);
+        downBtn.addEventListener('click', playMelodyDown);
+        nextBtn.addEventListener('click', doNext);
+        revealBtn.addEventListener('click', doReveal);
+        lowBtn.addEventListener('click', doShowLow);
+        highBtn.addEventListener('click', doShowHigh);
+        checkBtn.addEventListener('click', doCheck);
+
+        toneSelect.addEventListener('change', () => {
+            session.tones = parseInt(toneSelect.value, 10);
+            session.currentMidis = [];
+            clearFeedback();
+            updateUI();
+            setStatus('Tones set to ' + session.tones + '. Press Next for a new cluster.');
+        });
+
+        guessInput.addEventListener('keydown', (e) => {
+            e.stopPropagation(); // prevent keyboard shortcuts while typing
+            if (e.key === 'Enter') {
+                doCheck();
+            }
+        });
+
+        guessInput.addEventListener('keyup', (e) => {
+            e.stopPropagation();
+        });
+
+        // Keyboard shortcuts - capture phase so they fire before
+        // qwerty-hancock consumes the key as a piano note
+        const SHORTCUT_KEYS = {
+            'P': playChordNow,
+            'U': playMelodyUp,
+            'D': playMelodyDown,
+            'N': doNext,
+            'R': doReveal,
+            'L': doShowLow,
+            'H': doShowHigh
+        };
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+            const handler = SHORTCUT_KEYS[e.key.toUpperCase()];
+            if (handler) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                handler();
+            }
+        }, true);
+
+        // ============================================================
+        // PIANO KEYBOARD (qwerty-hancock + soundfont)
+        // ============================================================
+
+        function initKeyboard() {
+            const keyboard = new QwertyHancock({
+                id: 'keyboard',
+                width: 850,
+                height: 150,
+                octaves: 4,
+                startNote: 'C3',
+                whiteKeyColour: '#ffffff',
+                blackKeyColour: '#333333',
+                activeColour: '#4a7aed',
+                borderColour: '#e5e9f2'
+            });
+
+            keyboard.keyDown = function (note) {
+                if (!TiulPiano.isReady()) return;
+                if (keyboardStops[note]) {
+                    keyboardStops[note]();
+                }
+                keyboardStops[note] = TiulPiano.playNote(note, 10);
+            };
+
+            keyboard.keyUp = function (note) {
+                if (keyboardStops[note]) {
+                    keyboardStops[note]();
+                    delete keyboardStops[note];
+                }
+            };
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+
+        function initAudio() {
+            setStatus('Loading piano samples (this may take a moment)...');
+            TiulPiano.init(
+                function () {
+                    playBtn.disabled = false;
+                    setStatus('Ready! Choose the number of tones, then press Next.');
+                    initKeyboard();
+                },
+                function (e) {
+                    setStatus('Error loading piano: ' + e.message);
+                    console.error(e);
+                }
+            );
+        }
+
+        updateUI();
+        initAudio();
+    })();
+</script>
+</body>
+</html>

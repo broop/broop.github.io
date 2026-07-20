@@ -71,6 +71,7 @@
           Transposition
           <select id="transpSelect">
             <option value="Bb">B&#9837;</option>
+            <option value="A">A</option>
             <option value="Eb">E&#9837;</option>
             <option value="F">F</option>
           </select>
@@ -122,6 +123,13 @@
         <span class="pill">Accidentals are spelled exactly</span>
       </div>
 
+      <div class="row">
+        <button id="playWrittenBtn" type="button">&#9834; Written</button>
+        <button id="playConcertBtn" type="button">&#9834; Concert</button>
+        <button id="playBothBtn" type="button">&#9834; Written &rarr; Concert</button>
+        <span class="pill" id="audioStatus">Audio: not loaded</span>
+      </div>
+
       <div id="promptLabel" class="prompt"></div>
 
       <div id="score"></div>
@@ -136,6 +144,7 @@
 
     <!-- VexFlow 4.x prebundled build that exposes global Vex.Flow -->
     <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/releases/vexflow-min.js"></script>
+    <script src="tiul-piano.js"></script>
 
     <script>
       (function () {
@@ -153,6 +162,10 @@
         const minOctInput = document.getElementById("minOct");
         const maxOctInput = document.getElementById("maxOct");
         const resetRangesBtn = document.getElementById("resetRangesBtn");
+        const playWrittenBtn = document.getElementById("playWrittenBtn");
+        const playConcertBtn = document.getElementById("playConcertBtn");
+        const playBothBtn = document.getElementById("playBothBtn");
+        const audioStatus = document.getElementById("audioStatus");
 
         function setFeedback(msg) { feedbackDiv.textContent = msg; }
 
@@ -170,6 +183,7 @@
         // Transposition definitions: Concert → Written goes UP by these intervals
         const TRANSPOSITIONS = {
           Bb: { label: "B\u266D", dSteps: 1, semiSteps: 2, fifths: 2 },
+          A:  { label: "A",       dSteps: 2, semiSteps: 3, fifths: -3 },
           Eb: { label: "E\u266D", dSteps: 5, semiSteps: 9, fifths: 3 },
           F:  { label: "F",       dSteps: 4, semiSteps: 7, fifths: 1 },
         };
@@ -416,6 +430,7 @@
 
         function newRound() {
           cancelAutoAdvance();
+          if (typeof TiulPiano !== "undefined" && audioReady) TiulPiano.stopAll();
 
           const result = pickSourceAndAnswer();
           sourceNote = result.source;
@@ -447,8 +462,67 @@
           }
         }
 
+        // ---- Audio ----
+        let audioReady = false;
+        let audioLoading = false;
+
+        function setAudioStatus(msg) { audioStatus.textContent = msg; }
+
+        function ensureAudio() {
+          if (audioReady) return Promise.resolve(true);
+          if (audioLoading) return new Promise((res) => {
+            const t = setInterval(() => {
+              if (!audioLoading) { clearInterval(t); res(audioReady); }
+            }, 100);
+          });
+          if (typeof TiulPiano === "undefined") {
+            setAudioStatus("Audio: TiulPiano script not found");
+            return Promise.resolve(false);
+          }
+          audioLoading = true;
+          setAudioStatus("Audio: loading samples…");
+          return new Promise((resolve) => {
+            TiulPiano.init(
+              () => {
+                audioReady = true;
+                audioLoading = false;
+                setAudioStatus("Audio: ready");
+                resolve(true);
+              },
+              (err) => {
+                audioLoading = false;
+                setAudioStatus("Audio: load failed");
+                console.error(err);
+                resolve(false);
+              }
+            );
+          });
+        }
+
+        async function playPitch(pitch, duration) {
+          if (!pitch) return;
+          const ok = await ensureAudio();
+          if (!ok) return;
+          TiulPiano.stopAll();
+          TiulPiano.playNote(pitch, duration || 1.4);
+        }
+
+        async function playWrittenThenConcert() {
+          if (!sourceNote || !answer) return;
+          const ok = await ensureAudio();
+          if (!ok) return;
+          TiulPiano.stopAll();
+          TiulPiano.playNote(sourceNote, 1.0);
+          setTimeout(() => {
+            TiulPiano.playNote(answer, 1.4);
+          }, 1100);
+        }
+
         // Wire up UI
         newBtn.addEventListener("click", newRound);
+        playWrittenBtn.addEventListener("click", () => playPitch(sourceNote, 1.4));
+        playConcertBtn.addEventListener("click", () => playPitch(answer, 1.4));
+        playBothBtn.addEventListener("click", playWrittenThenConcert);
         checkBtn.addEventListener("click", check);
         transpSelect.addEventListener("change", newRound);
         concertKeySelect.addEventListener("change", newRound);
