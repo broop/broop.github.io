@@ -354,9 +354,18 @@
             melodyTimers = [];
         }
 
+        // Generate a cluster on demand so Play/Melody work before the
+        // first Next press (and after the tone count changes).
+        function ensureCluster() {
+            if (session.currentMidis.length === 0) {
+                clearFeedback();
+                generateCluster();
+            }
+        }
+
         function playChordNow() {
             if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
-            if (session.currentMidis.length === 0) return;
+            ensureCluster();
             stopMelody();
             TiulPiano.stopAll();
             TiulPiano.playChord(session.currentMidis, CONFIG.CHORD_DURATION);
@@ -379,10 +388,14 @@
         }
 
         function playMelodyUp() {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            ensureCluster();
             playMelody(session.currentMidis);
         }
 
         function playMelodyDown() {
+            if (!TiulPiano.isReady()) { setStatus('Piano not loaded yet.'); return; }
+            ensureCluster();
             playMelody(session.currentMidis.slice().reverse());
         }
 
@@ -654,7 +667,7 @@
             TiulPiano.init(
                 function () {
                     playBtn.disabled = false;
-                    setStatus('Ready! Choose the number of tones, then press Next.');
+                    setStatus('Ready! Choose the number of tones, then press Play or Next.');
                     initKeyboard();
                 },
                 function (e) {

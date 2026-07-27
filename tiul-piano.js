@@ -19,6 +19,7 @@ const TiulPiano = (function () {
 
     let audioCtx = null;
     let buffers = {};      // midi number -> AudioBuffer
+    let pending = {};      // midi number -> in-flight fetch for out-of-range notes
     let activeNodes = [];  // currently playing source nodes
     let ready = false;
 
@@ -62,16 +63,23 @@ const TiulPiano = (function () {
 
     // ---- Public API ----
 
-    async function init(onReady, onError) {
+    // options.range = [lowMidi, highMidi] preloads only that span instead of
+    // all 88 samples (~2 MB). Notes outside the span still play - they are
+    // fetched on demand by play(). Omit options for the original behaviour.
+    async function init(onReady, onError, options) {
         try {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-            // Preload all 88 samples in parallel
+            const range = (options && options.range) || [MIDI_MIN, MIDI_MAX];
+            const lo = Math.max(MIDI_MIN, range[0]);
+            const hi = Math.min(MIDI_MAX, range[1]);
+
             const promises = [];
-            for (let i = 1; i <= TOTAL_FILES; i++) {
-                const midi = MIDI_MIN + i - 1;
+            for (let midi = lo; midi <= hi; midi++) {
+                const fileNum = midiToFileNum(midi);
+                if (fileNum === null) continue;
                 promises.push(
-                    loadBuffer(i).then(buf => { buffers[midi] = buf; })
+                    loadBuffer(fileNum).then(buf => { buffers[midi] = buf; })
                 );
             }
 
@@ -94,12 +102,27 @@ const TiulPiano = (function () {
         activeNodes = [];
     }
 
-    function play(midi, duration) {
+    // options.fade = seconds of fade-out applied both when `duration` runs
+    // out and when the returned stop function is called. Defaults to 0.05.
+    // Pass 0 for a hard cut - be aware that stopping a sample while it still
+    // has amplitude can produce an audible click.
+    function play(midi, duration, options) {
         if (!ready || !audioCtx) return null;
         resumeCtx();
 
+        const fade = (options && options.fade !== undefined) ? options.fade : 0.05;
+
         const buf = buffers[midi];
-        if (!buf) return null;
+        if (!buf) {
+            // Outside the preloaded range: fetch it now and play once it lands.
+            const fileNum = midiToFileNum(midi);
+            if (fileNum !== null && !pending[midi]) {
+                pending[midi] = loadBuffer(fileNum)
+                    .then(b => { buffers[midi] = b; delete pending[midi]; })
+                    .catch(() => { delete pending[midi]; });
+            }
+            return null;
+        }
 
         const source = audioCtx.createBufferSource();
         source.buffer = buf;
@@ -114,13 +137,16 @@ const TiulPiano = (function () {
 
         activeNodes.push(source);
 
-        // Auto-stop after duration with short fade
+        // Auto-stop after duration, with a fade unless one was waived
         if (duration && duration > 0) {
-            const fadeTime = 0.05;
             const stopTime = audioCtx.currentTime + duration;
-            gain.gain.setValueAtTime(1, stopTime - fadeTime);
-            gain.gain.linearRampToValueAtTime(0, stopTime);
-            source.stop(stopTime + 0.01);
+            if (fade > 0) {
+                gain.gain.setValueAtTime(1, stopTime - fade);
+                gain.gain.linearRampToValueAtTime(0, stopTime);
+                source.stop(stopTime + 0.01);
+            } else {
+                source.stop(stopTime);
+            }
         }
 
         // Clean up from activeNodes when done
@@ -131,18 +157,22 @@ const TiulPiano = (function () {
 
         return function stopFn() {
             try {
-                gain.gain.cancelScheduledValues(audioCtx.currentTime);
-                gain.gain.setValueAtTime(gain.gain.value, audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
-                source.stop(audioCtx.currentTime + 0.06);
+                if (fade > 0) {
+                    gain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    gain.gain.setValueAtTime(gain.gain.value, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + fade);
+                    source.stop(audioCtx.currentTime + fade + 0.01);
+                } else {
+                    source.stop();
+                }
             } catch (e) {}
         };
     }
 
-    function playNote(name, duration) {
+    function playNote(name, duration, options) {
         const midi = noteNameToMidi(name);
         if (midi === null) return null;
-        return play(midi, duration);
+        return play(midi, duration, options);
     }
 
     function playChord(midis, duration) {

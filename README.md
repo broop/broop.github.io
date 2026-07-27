@@ -11,3 +11,9 @@
 - <a href="https://broop.github.io/player.html" target="_blank">Note & Triad Player</a>
 - <a href="https://broop.github.io/tiul_for_2.html" target="_blank">Tiul for 2 - Diad Ear Training</a>
 - <a href="https://broop.github.io/transposition.html" target="_blank">Transposition Trainer</a>
+
+- <a href="https://broop.github.io/sevenths.html" target="_blank">7th Chords - Ear Training</a>
+- <a href="https://broop.github.io/triads.html" target="_blank">Triads - Ear Training</a>
+- <a href="https://broop.github.io/quartal.html" target="_blank">Quartal &amp; Quintal Harmony - Ear Training</a>
+- <a href="https://broop.github.io/clusters.html" target="_blank">Clusters - Ear Training</a>
+- <a href="https://broop.github.io/position.html" target="_blank">Position (Matzav) - Ear Training</a>
