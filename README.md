@@ -21,3 +21,7 @@
 - <a href="https://broop.github.io/reverse_tiul_multi.html" target="_blank">Reverse Tiul Multi - Weighted Markov Ear Training</a>
 - <a href="https://broop.github.io/melodic_tiul.html" target="_blank">Melodic Tiul - Ear Training</a>
 - <a href="https://broop.github.io/repetitions.html" target="_blank">Repetitions - Ear Training</a>
+- <a href="https://broop.github.io/progressions.html" target="_blank">Progressions (SATB) - Ear Training</a>
+- <a href="https://broop.github.io/bach_progressions.html" target="_blank">Bach Progressions - Ear Training</a>
+- <a href="https://broop.github.io/hindy.html" target="_blank">Hindy - Dictation Training</a>
+- <a href="https://broop.github.io/nachashim.html" target="_blank">Nachashim - Melodic Dictation</a>

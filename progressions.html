@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Progressions (SATB) - Ear Training</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .satb-table {
+            border-collapse: collapse;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .satb-table th, .satb-table td {
+            border: 1px solid #e5e9f2;
+            padding: 6px 14px;
+            text-align: center;
+        }
+
+        .satb-table th {
+            background: #f8f9fb;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
+        .satb-table td.voice {
+            background: #f8f9fb;
+            font-weight: 600;
+            color: #555;
+            text-align: right;
+        }
+
+        .satb-table tr.state-row td {
+            font-size: 11px;
+            color: #999;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Progressions (SATB) &mdash; Ear Training</h1>
+
+    <div class="group-title">Progressions in play</div>
+    <div class="checks" id="progressionChecks"></div>
+
+    <div class="row" style="margin-top:14px">
+        <label>
+            Keys
+            <select id="keyMode">
+                <option value="all">All 7 keys</option>
+                <option value="C">C only</option>
+                <option value="G">G only</option>
+                <option value="F">F only</option>
+                <option value="D">D only</option>
+                <option value="A">A only</option>
+                <option value="B-">Bb only</option>
+                <option value="E-">Eb only</option>
+            </select>
+        </label>
+        <label class="test-mode-label">
+            <input type="checkbox" id="showKey" checked/> Show key on Next
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="melodicBtn">Melodic <span class="shortcut">(M)</span></button>
+        <button id="bassBtn">Bass line <span class="shortcut">(B)</span></button>
+        <button id="sopranoBtn">Soprano <span class="shortcut">(S)</span></button>
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div id="satbContainer"></div>
+
+    <div class="row" style="margin-top:14px">
+        <label>
+            Your guess (the progression)
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. I IV V I" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>M</b>=Melodic, <b>B</b>=Bass line, <b>S</b>=Soprano line, <b>N</b>=Next,
+        <b>R</b>=Reveal.<br/>
+        Four voices (SATB) move by Bach-derived voice-leading rules; each chord change picks the voicing with the
+        lowest transition cost. Answer with the roman numerals in order, e.g. <code>I IV V I</code> or
+        <code>I-ii6-V-I</code> &mdash; case and figures matter (<code>ii6</code> is first inversion).
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-drill.js"></script>
+<script src="et-ui.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/progressions4.py, the FSM-based SATB trainer -
+        // the most mature of the four progressions*.py variants. The
+        // progression catalogue merges all four files, with each entry's
+        // source noted; the ones enabled in the Python are on by default.
+        //
+        // The port is faithful to the Python's machinery:
+        //  - VoicingFSM: every assignment of R/3/5 to the four voices that
+        //    covers all three degrees, grouped by bass degree (inversion).
+        //  - Voice ranges: bass G2-G3, tenor C4-G4, alto E4-D5,
+        //    soprano G4-G5, no crossing, upper voices within an octave.
+        //  - TransitionRules: the cost table derived from 771 Bach chorale
+        //    voice transitions (parallel 5th/8ve 5.3, leading-tone
+        //    violation 3.0, static inner voice 0.82, stepwise bonus -1.0),
+        //    including the soprano's random jitter, which is what keeps the
+        //    same progression from voicing identically every time.
+        //
+        // music21's RomanNumeral is replaced by direct scale-degree
+        // arithmetic: a diatonic triad on degree d is scale[d], scale[d+2],
+        // scale[d+4], and the figure gives the inversion. That covers every
+        // numeral the catalogue uses.
+        // ============================================================
+
+        const KEYS = ['C', 'G', 'F', 'D', 'A', 'B-', 'E-'];
+
+        // Merged from progressions.py (p1), progressions2.py (p2),
+        // progressions3.py (p3), progressions4.py (p4).
+        const PROGRESSIONS = [
+            { name: 'I-V-I', numerals: ['I', 'V', 'I'], on: true, source: 'p1' },
+            { name: 'I-IV-I', numerals: ['I', 'IV', 'I'], on: true, source: 'p1' },
+            { name: 'I-IV-V-I', numerals: ['I', 'IV', 'V', 'I'], on: true, source: 'p4' },
+            { name: 'I-ii6-V-I', numerals: ['I', 'ii6', 'V', 'I'], on: true, source: 'p4' },
+            { name: 'I-ii6-IV-V-I', numerals: ['I', 'ii6', 'IV', 'V', 'I'], on: false, source: 'p3' },
+            { name: 'I-vi-IV-V-I', numerals: ['I', 'vi', 'IV', 'V', 'I'], on: false, source: 'p4' },
+            { name: 'I-IV-ii6-V-I', numerals: ['I', 'IV', 'ii6', 'V', 'I'], on: false, source: 'p3' }
+        ];
+
+        const CONFIG = {
+            CHORD_DURATION: 1.6,
+            CHORD_STEP_MS: 1800,
+            MELODY_STEP_MS: 350,
+            LINE_STEP_MS: 900,
+            NOTE_DURATION: 0.8
+        };
+
+        // ---- roman numeral resolution (RomanNumeral replacement) ----
+
+        const MAJOR_SCALE_SEMIS = [0, 2, 4, 5, 7, 9, 11];
+        const MAJOR_SCALE_INTERVALS = [[0, 0], [1, 2], [2, 4], [3, 5], [4, 7], [5, 9], [6, 11]];
+        const NUMERAL_DEGREE = { I: 0, II: 1, III: 2, IV: 3, V: 4, VI: 5, VII: 6 };
+
+        function parseNumeral(numeral) {
+            const m = /^([ivIV]+)(6?4?|64)?$/.exec(numeral);
+            if (!m) return null;
+            const degree = NUMERAL_DEGREE[m[1].toUpperCase()];
+            if (degree === undefined) return null;
+            const figure = m[2] || '';
+            const inversion = figure === '64' ? 2 : (figure === '6' ? 1 : 0);
+            return { degree: degree, inversion: inversion };
+        }
+
+        // Degree -> pitch class for root/third/fifth of the triad on `degree`.
+        function chordPitchClasses(keyName, degree) {
+            const tonic = KEY_OFFSETS_LOCAL[keyName];
+            return {
+                0: (tonic + MAJOR_SCALE_SEMIS[degree]) % 12,                 // ROOT
+                1: (tonic + MAJOR_SCALE_SEMIS[(degree + 2) % 7]) % 12,       // THIRD
+                2: (tonic + MAJOR_SCALE_SEMIS[(degree + 4) % 7]) % 12        // FIFTH
+            };
+        }
+
+        const KEY_OFFSETS_LOCAL = { 'C': 0, 'G': 7, 'F': 5, 'D': 2, 'A': 9, 'B-': 10, 'E-': 3 };
+
+        // Spelled major scale per key -> pitch class to name, for the reveal.
+        // This is spell_pitch's scale cache.
+        const SCALE_SPELLING = {};
+        KEYS.forEach(function (k) {
+            const scale = ET.buildChord(k, 4, MAJOR_SCALE_INTERVALS);
+            const map = {};
+            scale.forEach(n => { map[ET.pitchClass(n.midi)] = n.name; });
+            SCALE_SPELLING[k] = map;
+        });
+
+        function spellMidi(midi, keyName) {
+            const name = SCALE_SPELLING[keyName][ET.pitchClass(midi)];
+            if (!name) return ET.midiToName(midi);   // chromatic: sharp default
+            return name.replace(/-/g, 'b') + (Math.floor(midi / 12) - 1);
+        }
+
+        // ---- VoicingFSM ----
+
+        const RANGES = {
+            bass: [43, 55],      // G2-G3
+            tenor: [60, 67],     // C4-G4
+            alto: [64, 74],      // E4-D5
+            soprano: [67, 79]    // G4-G5
+        };
+        const VOICES = ['bass', 'tenor', 'alto', 'soprano'];
+
+        // All states per bass degree: every (tenor, alto, soprano) assignment
+        // of R/3/5 such that all three degrees appear among the four voices.
+        const STATES = { 0: [], 1: [], 2: [] };
+        [0, 1, 2].forEach(function (bassDeg) {
+            [0, 1, 2].forEach(function (t) {
+                [0, 1, 2].forEach(function (a) {
+                    [0, 1, 2].forEach(function (s) {
+                        const all = [bassDeg, t, a, s];
+                        if (all.indexOf(0) !== -1 && all.indexOf(1) !== -1 && all.indexOf(2) !== -1) {
+                            STATES[bassDeg].push({ bass: bassDeg, tenor: t, alto: a, soprano: s });
+                        }
+                    });
+                });
+            });
+        });
+
+        // state_to_pitches: first in-range midi matching the pitch class,
+        // each voice above the last, upper voices within an octave.
+        function stateToPitches(state, pcs) {
+            function findInRange(pc, voice, minMidi) {
+                const lo = Math.max(RANGES[voice][0], minMidi || 0);
+                const hi = RANGES[voice][1];
+                for (let midi = lo; midi <= hi; midi++) {
+                    if (midi % 12 === pc) return midi;
+                }
+                return null;
+            }
+
+            const bass = findInRange(pcs[state.bass], 'bass');
+            if (bass === null) return null;
+            const tenor = findInRange(pcs[state.tenor], 'tenor', bass + 1);
+            if (tenor === null) return null;
+            const alto = findInRange(pcs[state.alto], 'alto', tenor + 1);
+            if (alto === null) return null;
+            const soprano = findInRange(pcs[state.soprano], 'soprano', alto + 1);
+            if (soprano === null) return null;
+
+            if (soprano - alto > 12 || alto - tenor > 12) return null;
+
+            return { bass: bass, tenor: tenor, alto: alto, soprano: soprano, state: state };
+        }
+
+        function voicingsForChord(numeral, keyName) {
+            const parsed = parseNumeral(numeral);
+            const pcs = chordPitchClasses(keyName, parsed.degree);
+            const out = [];
+            STATES[parsed.inversion].forEach(function (state) {
+                const v = stateToPitches(state, pcs);
+                if (v) out.push(v);
+            });
+            return out;
+        }
+
+        // ---- TransitionRules ----
+
+        const COST = {
+            PARALLEL_5TH_8VE: 5.3,
+            LEADING_TONE_VIOLATION: 3.0,
+            INNER_STATIC: 0.82,
+            INNER_STEPWISE_BONUS: -1.0
+        };
+
+        function transitionCost(prev, curr, prevNumeral, currNumeral, keyName) {
+            let cost = 0;
+
+            VOICES.forEach(function (voice) {
+                const motion = Math.abs(curr[voice] - prev[voice]);
+                if (voice === 'bass') {
+                    cost += motion;
+                } else if (voice === 'soprano') {
+                    cost += motion * 0.5 + (Math.random() * 6 - 3);   // uniform(-3, 3)
+                } else {
+                    if (motion === 0) cost += COST.INNER_STATIC;
+                    else if (motion <= 2) cost += COST.INNER_STEPWISE_BONUS;
+                    else if (motion > 5) cost += motion;
+                }
+            });
+
+            // Parallel 5ths and octaves
+            for (let i = 0; i < VOICES.length; i++) {
+                for (let j = i + 1; j < VOICES.length; j++) {
+                    const v1 = VOICES[i], v2 = VOICES[j];
+                    const prevInterval = Math.abs(prev[v1] - prev[v2]) % 12;
+                    const currInterval = Math.abs(curr[v1] - curr[v2]) % 12;
+                    if ((prevInterval === 0 || prevInterval === 7) && prevInterval === currInterval) {
+                        const m1 = curr[v1] - prev[v1];
+                        const m2 = curr[v2] - prev[v2];
+                        if (m1 !== 0 && m2 !== 0 && (m1 > 0) === (m2 > 0)) {
+                            cost += COST.PARALLEL_5TH_8VE;
+                        }
+                    }
+                }
+            }
+
+            // Leading tone resolution on V->I / VII->I
+            if (prevNumeral && currNumeral) {
+                const prevBase = prevNumeral.replace(/[0-9]/g, '').toUpperCase();
+                const currBase = currNumeral.replace(/[0-9]/g, '').toUpperCase();
+                if ((prevBase === 'V' || prevBase === 'VII') && currBase === 'I') {
+                    const tonicPc = KEY_OFFSETS_LOCAL[keyName];
+                    const leadingPc = (tonicPc + 11) % 12;
+                    VOICES.forEach(function (voice) {
+                        if (prev[voice] % 12 === leadingPc) {
+                            if (curr[voice] % 12 !== tonicPc) {
+                                cost += COST.LEADING_TONE_VIOLATION;
+                            } else if (curr[voice] !== prev[voice] + 1) {
+                                cost += COST.LEADING_TONE_VIOLATION;
+                            }
+                        }
+                    });
+                }
+            }
+
+            return cost;
+        }
+
+        function isValidTransition(curr) {
+            return curr.bass < curr.tenor && curr.tenor < curr.alto && curr.alto < curr.soprano;
+        }
+
+        // select_initial_voicing: random soprano degree, then most centered.
+        function selectInitial(voicings) {
+            const bySoprano = {};
+            voicings.forEach(function (v) {
+                (bySoprano[v.state.soprano] = bySoprano[v.state.soprano] || []).push(v);
+            });
+            const degs = Object.keys(bySoprano);
+            const candidates = bySoprano[degs[ET.randInt(degs.length)]];
+
+            let best = null, bestScore = Infinity;
+            candidates.forEach(function (v) {
+                let score = 0;
+                VOICES.forEach(function (voice) {
+                    const center = (RANGES[voice][0] + RANGES[voice][1]) / 2;
+                    score += Math.abs(v[voice] - center);
+                });
+                if (score < bestScore) { bestScore = score; best = v; }
+            });
+            return best;
+        }
+
+        function selectNext(prev, voicings, prevNumeral, currNumeral, keyName) {
+            let best = null, bestCost = Infinity;
+            voicings.forEach(function (v) {
+                if (!isValidTransition(v)) return;
+                const cost = transitionCost(prev, v, prevNumeral, currNumeral, keyName);
+                if (cost < bestCost) { bestCost = cost; best = v; }
+            });
+            return best || voicings[0];
+        }
+
+        // ---- DOM ----
+
+        const el = {
+            keyMode: ETUI.$('keyMode'),
+            showKey: ETUI.$('showKey'),
+            playBtn: ETUI.$('playBtn'),
+            melodicBtn: ETUI.$('melodicBtn'),
+            bassBtn: ETUI.$('bassBtn'),
+            sopranoBtn: ETUI.$('sopranoBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            checkBtn: ETUI.$('checkBtn'),
+            guessInput: ETUI.$('guessInput'),
+            revealDisplay: ETUI.$('revealDisplay'),
+            satbContainer: ETUI.$('satbContainer'),
+            feedback: ETUI.$('feedback'),
+            status: ETUI.$('status')
+        };
+
+        const updateStats = ETUI.bindStats({
+            correct: 'correctCount',
+            wrong: 'wrongCount',
+            played: 'playedCount'
+        });
+
+        const progressionGroup = ETUI.checkGroup('progressionChecks', {
+            items: PROGRESSIONS,
+            label: p => p.name,
+            feedback: el.feedback
+        });
+
+        // ---- generation ----
+
+        function generate() {
+            const prog = ET.choice(progressionGroup.active());
+            const keyName = el.keyMode.value === 'all'
+                ? ET.choice(KEYS)
+                : el.keyMode.value;
+
+            const voicings = [];
+            let prev = null, prevNumeral = null;
+
+            prog.numerals.forEach(function (numeral) {
+                const candidates = voicingsForChord(numeral, keyName);
+                const v = prev === null
+                    ? selectInitial(candidates)
+                    : selectNext(prev, candidates, prevNumeral, numeral, keyName);
+                voicings.push(v);
+                prev = v;
+                prevNumeral = numeral;
+            });
+
+            return { progression: prog, key: keyName, voicings: voicings };
+        }
+
+        let chordTimers = [];
+
+        function stopChords() {
+            chordTimers.forEach(clearTimeout);
+            chordTimers = [];
+        }
+
+        function play(item, mode) {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            stopChords();
+            ETUI.stopMelody();
+            TiulPiano.stopAll();
+
+            if (mode === 'bass' || mode === 'soprano') {
+                const line = item.voicings.map(v => v[mode]);
+                ETUI.playMelody(line, { stepMs: CONFIG.LINE_STEP_MS, duration: 0.85 });
+                return;
+            }
+
+            if (mode === 'melodic') {
+                // Each chord bottom-up, chord after chord.
+                const seq = [];
+                item.voicings.forEach(function (v) {
+                    VOICES.forEach(voice => seq.push(v[voice]));
+                });
+                ETUI.playMelody(seq, { stepMs: CONFIG.MELODY_STEP_MS, duration: 0.6 });
+                return;
+            }
+
+            // Harmonic: one chord per step.
+            item.voicings.forEach(function (v, i) {
+                chordTimers.push(setTimeout(function () {
+                    TiulPiano.playChord(VOICES.map(voice => v[voice]), CONFIG.CHORD_DURATION);
+                }, i * CONFIG.CHORD_STEP_MS));
+            });
+        }
+
+        // ---- reveal ----
+
+        const STATE_NAMES = ['R', '3', '5'];
+
+        function renderSATB(item) {
+            let html = '<table class="satb-table"><tr><th></th>';
+            item.progression.numerals.forEach(function (n) {
+                html += '<th>' + n + '</th>';
+            });
+            html += '</tr>';
+
+            ['soprano', 'alto', 'tenor', 'bass'].forEach(function (voice) {
+                html += '<tr><td class="voice">' + voice[0].toUpperCase() + '</td>';
+                item.voicings.forEach(function (v) {
+                    html += '<td>' + spellMidi(v[voice], item.key) + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            html += '<tr class="state-row"><td class="voice">deg</td>';
+            item.voicings.forEach(function (v) {
+                html += '<td>' + VOICES.map(voice => STATE_NAMES[v.state[voice]]).join(' ') + '</td>';
+            });
+            html += '</tr></table>';
+
+            el.satbContainer.innerHTML = html;
+        }
+
+        function describe(item) {
+            return item.progression.name + ' in ' + item.key.replace('-', 'b') + ' major';
+        }
+
+        // ---- checking ----
+
+        function normalizeProgression(raw) {
+            return (raw || '').trim().split(/[\s,\->]+/).filter(t => t.length > 0);
+        }
+
+        function check(raw, item) {
+            const tokens = normalizeProgression(raw);
+            if (tokens.length === 0) {
+                return { invalid: true, message: 'Name the progression first.' };
+            }
+
+            const actual = item.progression.numerals;
+            if (tokens.length !== actual.length) {
+                return {
+                    invalid: true,
+                    message: 'That is ' + tokens.length + ' chords — this progression has ' + actual.length + '.'
+                };
+            }
+
+            // Case and figures are significant: ii6 is not II or ii64.
+            let hits = 0;
+            for (let i = 0; i < actual.length; i++) {
+                if (tokens[i] === actual[i]) hits++;
+            }
+
+            if (hits === actual.length) {
+                return { correct: true, message: 'Correct — ' + describe(item) };
+            }
+            return {
+                correct: false,
+                message: hits + ' of ' + actual.length + ' chords right. It was ' + describe(item)
+            };
+        }
+
+        // ---- drill ----
+
+        const drill = ETDrill.create({
+            generate: generate,
+            play: play,
+            describe: describe,
+            check: check
+        });
+
+        function refresh() { updateStats(drill.state); }
+
+        function doPlay() { drill.play('harmonic'); refresh(); }
+        function doMelodic() { drill.play('melodic'); refresh(); }
+        function doBassLine() { drill.play('bass'); refresh(); }
+        function doSoprano() { drill.play('soprano'); refresh(); }
+
+        function doNext() {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            el.satbContainer.innerHTML = '';
+            el.guessInput.value = '';
+            const item = drill.next();
+            if (el.showKey.checked) {
+                ETUI.setText(el.revealDisplay, 'Key: ' + item.key.replace('-', 'b') + ' major');
+            }
+            refresh();
+        }
+
+        function doReveal() {
+            const item = drill.current();
+            if (!item) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            drill.reveal();
+            ETUI.setText(el.revealDisplay, describe(item));
+            renderSATB(item);
+            refresh();
+        }
+
+        function doCheck() {
+            const result = drill.submit(el.guessInput.value);
+            ETUI.setFeedback(el.feedback, result.message, result.correct ? 'success' : 'error');
+            if (result.scored) {
+                el.guessInput.value = '';
+                el.guessInput.blur();
+            }
+            refresh();
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.melodicBtn.addEventListener('click', doMelodic);
+        el.bassBtn.addEventListener('click', doBassLine);
+        el.sopranoBtn.addEventListener('click', doSoprano);
+        el.nextBtn.addEventListener('click', doNext);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.checkBtn.addEventListener('click', doCheck);
+
+        el.keyMode.addEventListener('change', function () {
+            ETUI.setText(el.status, 'Keys: ' + el.keyMode.options[el.keyMode.selectedIndex].text + '. Press Next.');
+        });
+
+        ETUI.guessField(el.guessInput, doCheck);
+
+        ETUI.shortcuts({
+            P: doPlay,
+            M: doMelodic,
+            B: doBassLine,
+            S: doSoprano,
+            N: doNext,
+            R: doReveal
+        });
+
+        refresh();
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [40, 84],
+            readyMessage: 'Ready! Press Next for a progression.'
+        });
+    })();
+</script>
+</body>
+</html>

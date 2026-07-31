@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Nachashim - Melodic Dictation</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .phrase-nav {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .phrase-label {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            color: #555;
+            min-width: 110px;
+            text-align: center;
+        }
+
+        .answer {
+            margin-top: 10px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #2563eb;
+            min-height: 24px;
+        }
+
+        .answer:empty { display: none; }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Nachashim &mdash; Melodic Dictation</h1>
+
+    <div class="row">
+        <label>
+            Set
+            <select id="setSelect"></select>
+        </label>
+        <label>
+            Speed
+            <select id="speedSelect">
+                <option value="900">Slow</option>
+                <option value="650" selected>Medium</option>
+                <option value="450">Fast</option>
+            </select>
+        </label>
+        <div class="phrase-nav" style="align-self:end">
+            <button id="prevBtn">&#8592; Prev <span class="shortcut">(B)</span></button>
+            <span id="groupLabel" class="phrase-label">&mdash;</span>
+            <button id="nextBtn">Next &#8594; <span class="shortcut">(N)</span></button>
+        </div>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="againBtn">Again <span class="shortcut">(A)</span></button>
+        <button id="harmonicBtn">Harmonic <span class="shortcut">(H)</span></button>
+        <button id="firstBtn">First note <span class="shortcut">(F)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+    </div>
+
+    <div id="answer" class="answer"></div>
+
+    <div class="row" style="margin-top:14px">
+        <label>
+            Your guess (the notes, in order &mdash; octaves optional)
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. B E A D G Eb C Ab F G A B C#"
+                   autocomplete="off" style="min-width:420px"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+        <span>Elapsed: <span id="elapsed">0:00</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>A</b>=Again, <b>H</b>=Harmonic, <b>F</b>=First note, <b>N</b>=Next group,
+        <b>B</b>=Previous group, <b>R</b>=Reveal.<br/>
+        Atonal lines of 12&ndash;13 notes within a fixed tessitura.
+        Work with <b>First note</b> as the anchor, write the line down, then reveal or type it to
+        check &mdash; order matters, octaves and enharmonics do not (<code>Ab</code> = <code>G#</code>).
+        <b>Harmonic</b> stacks the whole group as one sonority.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-drill.js"></script>
+<script src="et-ui.js"></script>
+<script src="nachashim-data.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/Nachashim.py (Nachashim2.py is an abridged copy
+        // of the same class).
+        //
+        // The Python reads a Nachashim MIDI file, splits it into groups on
+        // the rests, and offers first note / play / reveal / next. The
+        // splitting is done offline by src/export_nachashim.py, which reads
+        // the MusicXML instead - same groups, correct spellings - and
+        // writes nachashim-data.js.
+        //
+        // From the class docstring: melodic playback is the default with
+        // harmonic as an option (the Harmonic button), the ending note of
+        // one group is the starting note of the next, and the material is
+        // atonal - so the check compares pitch classes in order, accepting
+        // enharmonic equivalents.
+        //
+        // Answer checking is added as on the other pages; the Python has
+        // only reveal.
+        // ============================================================
+
+        const SETS = Object.keys(NACHASHIM);
+
+        const CONFIG = {
+            NOTE_DURATION: 0.85,
+            HARMONIC_DURATION: 4.0,
+            FIRST_NOTE_DURATION: 1.5
+        };
+
+        // ---- DOM ----
+
+        const el = {
+            setSelect: ETUI.$('setSelect'),
+            speedSelect: ETUI.$('speedSelect'),
+            prevBtn: ETUI.$('prevBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            groupLabel: ETUI.$('groupLabel'),
+            playBtn: ETUI.$('playBtn'),
+            againBtn: ETUI.$('againBtn'),
+            harmonicBtn: ETUI.$('harmonicBtn'),
+            firstBtn: ETUI.$('firstBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            checkBtn: ETUI.$('checkBtn'),
+            guessInput: ETUI.$('guessInput'),
+            answer: ETUI.$('answer'),
+            feedback: ETUI.$('feedback'),
+            elapsed: ETUI.$('elapsed'),
+            status: ETUI.$('status')
+        };
+
+        SETS.forEach(function (name) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = 'Nachashim ' + name + ' (' + NACHASHIM[name].groups.length + ' groups)';
+            el.setSelect.appendChild(opt);
+        });
+
+        const updateStats = ETUI.bindStats({
+            correct: 'correctCount',
+            wrong: 'wrongCount',
+            played: 'playedCount'
+        });
+
+        const session = {
+            set: SETS[0],
+            groupIdx: 0,
+            startTime: Date.now()
+        };
+
+        function groups() { return NACHASHIM[session.set].groups; }
+        function currentGroup() { return groups()[session.groupIdx]; }
+
+        function displayName(n) { return n.replace(/-/g, 'b'); }
+
+        // ---- drill ----
+
+        // generate() returns the group at the cursor; navigation moves the
+        // cursor and calls next() so the scoring guard resets per group.
+        const drill = ETDrill.create({
+            generate: function () {
+                return currentGroup();
+            },
+            play: function (item, mode) {
+                if (!TiulPiano.isReady()) {
+                    ETUI.setText(el.status, 'Piano not loaded yet.');
+                    return;
+                }
+                if (mode === 'harmonic') {
+                    // The docstring's optional harmonic mode: the whole
+                    // group as one sonority.
+                    ETUI.playChord(item.midis, CONFIG.HARMONIC_DURATION);
+                } else if (mode === 'first') {
+                    ETUI.stopMelody();
+                    TiulPiano.stopAll();
+                    TiulPiano.play(item.midis[0], CONFIG.FIRST_NOTE_DURATION);
+                } else {
+                    ETUI.playMelody(item.midis, {
+                        stepMs: parseInt(el.speedSelect.value, 10),
+                        duration: CONFIG.NOTE_DURATION
+                    });
+                }
+            },
+            describe: function (item) {
+                return item.names.map(displayName).join('  ');
+            },
+            check: function (raw, item) {
+                const guessed = ET.parsePitchClasses(raw);
+                if (guessed === null) {
+                    return { invalid: true, message: 'Could not read those note names.' };
+                }
+                const actual = item.midis.map(m => ET.pitchClass(m));
+                if (guessed.length !== actual.length) {
+                    return {
+                        invalid: true,
+                        message: 'That is ' + guessed.length + ' notes — the group has ' + actual.length + '.'
+                    };
+                }
+                let hits = 0;
+                const marks = [];
+                for (let i = 0; i < actual.length; i++) {
+                    const ok = guessed[i] === actual[i];
+                    if (ok) hits++;
+                    marks.push(ok ? '.' : 'x');
+                }
+                if (hits === actual.length) {
+                    return { correct: true, message: 'Correct — all ' + actual.length + ' notes.' };
+                }
+                return {
+                    correct: false,
+                    message: hits + ' of ' + actual.length + ' in place [' + marks.join('') + ']'
+                };
+            }
+        });
+
+        // ---- UI ----
+
+        function renderNav() {
+            el.groupLabel.textContent =
+                'group ' + (session.groupIdx + 1) + ' / ' + groups().length;
+            el.prevBtn.disabled = session.groupIdx === 0;
+            el.nextBtn.disabled = session.groupIdx >= groups().length - 1;
+            updateStats(drill.state);
+        }
+
+        function renderElapsed() {
+            const secs = Math.floor((Date.now() - session.startTime) / 1000);
+            el.elapsed.textContent =
+                Math.floor(secs / 60) + ':' + ('' + (secs % 60)).padStart(2, '0');
+        }
+
+        function clearGroupUI() {
+            el.answer.textContent = '';
+            el.guessInput.value = '';
+            ETUI.clearFeedback(el.feedback);
+        }
+
+        function doPlay() { drill.play('melodic'); renderNav(); }
+        function doAgain() { drill.play('melodic'); }
+        function doHarmonic() { drill.play('harmonic'); }
+
+        function doFirst() {
+            const item = drill.ensure();
+            drill.play('first');
+            el.answer.textContent = 'First: ' + displayName(item.names[0]);
+        }
+
+        function doReveal() {
+            const text = drill.reveal();
+            el.answer.textContent = text;
+        }
+
+        function doCheck() {
+            const result = drill.submit(el.guessInput.value);
+            ETUI.setFeedback(el.feedback, result.message, result.correct ? 'success' : 'error');
+            if (result.scored && result.correct) {
+                el.guessInput.value = '';
+                el.guessInput.blur();
+            }
+            renderNav();
+        }
+
+        function move(delta) {
+            const target = session.groupIdx + delta;
+            if (target < 0 || target >= groups().length) return;
+            ETUI.stopMelody();
+            TiulPiano.stopAll();
+            session.groupIdx = target;
+            clearGroupUI();
+            drill.next();       // plays the new group and resets scoring
+            renderNav();
+        }
+
+        function switchSet() {
+            ETUI.stopMelody();
+            TiulPiano.stopAll();
+            session.set = el.setSelect.value;
+            session.groupIdx = 0;
+            clearGroupUI();
+            renderNav();
+            ETUI.setText(el.status, 'Nachashim ' + session.set + '. Press Play.');
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.againBtn.addEventListener('click', doAgain);
+        el.harmonicBtn.addEventListener('click', doHarmonic);
+        el.firstBtn.addEventListener('click', doFirst);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.checkBtn.addEventListener('click', doCheck);
+        el.nextBtn.addEventListener('click', function () { move(1); });
+        el.prevBtn.addEventListener('click', function () { move(-1); });
+        el.setSelect.addEventListener('change', switchSet);
+
+        ETUI.guessField(el.guessInput, doCheck);
+
+        ETUI.shortcuts({
+            P: doPlay,
+            A: doAgain,
+            H: doHarmonic,
+            F: doFirst,
+            R: doReveal,
+            N: function () { move(1); },
+            B: function () { move(-1); }
+        });
+
+        renderNav();
+        setInterval(renderElapsed, 1000);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [45, 96],
+            readyMessage: 'Ready! ' + groups().length + ' groups. Press Play for group 1.'
+        });
+    })();
+</script>
+</body>
+</html>
