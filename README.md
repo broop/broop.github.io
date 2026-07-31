@@ -17,3 +17,7 @@
 - <a href="https://broop.github.io/quartal.html" target="_blank">Quartal &amp; Quintal Harmony - Ear Training</a>
 - <a href="https://broop.github.io/clusters.html" target="_blank">Clusters - Ear Training</a>
 - <a href="https://broop.github.io/position.html" target="_blank">Position (Matzav) - Ear Training</a>
+- <a href="https://broop.github.io/tuples.html" target="_blank">Pitch Tuples - Ear Training</a>
+- <a href="https://broop.github.io/reverse_tiul_multi.html" target="_blank">Reverse Tiul Multi - Weighted Markov Ear Training</a>
+- <a href="https://broop.github.io/melodic_tiul.html" target="_blank">Melodic Tiul - Ear Training</a>
+- <a href="https://broop.github.io/repetitions.html" target="_blank">Repetitions - Ear Training</a>

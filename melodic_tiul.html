@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Melodic Tiul - Ear Training</title>
+    <link rel="stylesheet" href="et-style.css"/>
+</head>
+
+<body>
+<div class="card">
+    <h1>Melodic Tiul &mdash; Ear Training</h1>
+
+    <div class="row">
+        <label>
+            Key
+            <select id="keySelect"></select>
+        </label>
+        <label>
+            Source
+            <select id="sourceSelect">
+                <option value="markov">Markov (sample)</option>
+                <option value="structure">Known structure</option>
+            </select>
+        </label>
+        <label id="sampleLabel">
+            Sample
+            <select id="sampleSelect"></select>
+        </label>
+        <label id="structureLabel">
+            Structure
+            <select id="structureSelect"></select>
+        </label>
+    </div>
+
+    <div class="row">
+        <label>
+            Notes
+            <select id="lengthSelect"></select>
+        </label>
+        <label>
+            Registers
+            <select id="registerSelect">
+                <option value="1">1 octave</option>
+                <option value="2" selected>2 octaves</option>
+                <option value="3">3 octaves</option>
+            </select>
+        </label>
+        <label>
+            Motion
+            <select id="motionSelect">
+                <option value="up">Up from the root</option>
+                <option value="down">Down from the root</option>
+                <option value="mixed">Mixed</option>
+                <option value="random" selected>Random</option>
+            </select>
+        </label>
+        <label>
+            Speed
+            <select id="speedSelect">
+                <option value="700">Slow</option>
+                <option value="480" selected>Medium</option>
+                <option value="320">Fast</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="againBtn">Again <span class="shortcut">(A)</span></button>
+        <button id="firstBtn">First note <span class="shortcut">(F)</span></button>
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div class="row">
+        <label>
+            Your guess (the notes, in the order played)
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. D E F# A" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>A</b>=Again, <b>F</b>=First note, <b>N</b>=Next, <b>R</b>=Reveal.<br/>
+        Name the notes <b>in the order they were played</b>, separated by spaces &mdash; no octaves needed.
+        Order is what is being tested here, so <code>D F# E</code> and <code>D E F#</code> are different answers.<br/>
+        Sequences are held inside the chosen number of registers: a line that walks off the top rotates back
+        to the bottom rather than climbing away.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-drill.js"></script>
+<script src="et-ui.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/melodic_tiul.py.
+        //
+        // The Python is half built. Its __main__ works - read a MIDI file,
+        // count the notes, order them by frequency, build a transition
+        // matrix over those indices and walk it 50 steps - but it depends on
+        // a local file (random_tiul1.mid) that is not in the repo. The
+        // SAMPLES in tiul-constants.js are already normalised degree
+        // sequences of exactly that kind, so they stand in as the source.
+        //
+        // Everything else comes from the class docstring, which describes
+        // more than the code implements:
+        //
+        //   "Shortest is 3 notes. Start with either known structure, or
+        //    chromatic. Keep the size limited to n registers. Notes will
+        //    rotate to the other end if they fall off. Motions - Up from the
+        //    root, down from the root, mixed, random."
+        //
+        // The known structures are its class constants. Note that
+        // chromatic_4 and chromatic_lower_4 are both [0, 1, 2, 4] in the
+        // Python - the same shape under two names - so they appear once here.
+        // ============================================================
+
+        const STRUCTURES = [
+            { key: 'CHROMATIC_LOWER', label: 'Chromatic (lower)', offsets: [0, 1, 2, 4] },
+            { key: 'CHROMATIC_UPPER', label: 'Chromatic (upper)', offsets: [0, 2, 3, 4] },
+            { key: 'WHOLE_TONE', label: 'Whole tone', offsets: [0, 2, 4, 6] },
+            { key: 'OCTATONIC', label: 'Octatonic', offsets: [0, 1, 3, 4] }
+        ];
+
+        const CONFIG = {
+            BASE_OCTAVE: 4,
+            MIN_LENGTH: 3,          // "Shortest is 3 notes"
+            MAX_LENGTH: 8,
+            DEFAULT_LENGTH: 4,
+            NOTE_DURATION: 0.75,
+            LOW_LIMIT: 45,
+            HIGH_LIMIT: 88
+        };
+
+        // ---- DOM ----
+
+        const el = {
+            keySelect: ETUI.$('keySelect'),
+            sourceSelect: ETUI.$('sourceSelect'),
+            sampleSelect: ETUI.$('sampleSelect'),
+            sampleLabel: ETUI.$('sampleLabel'),
+            structureSelect: ETUI.$('structureSelect'),
+            structureLabel: ETUI.$('structureLabel'),
+            lengthSelect: ETUI.$('lengthSelect'),
+            registerSelect: ETUI.$('registerSelect'),
+            motionSelect: ETUI.$('motionSelect'),
+            speedSelect: ETUI.$('speedSelect'),
+            playBtn: ETUI.$('playBtn'),
+            againBtn: ETUI.$('againBtn'),
+            firstBtn: ETUI.$('firstBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            checkBtn: ETUI.$('checkBtn'),
+            guessInput: ETUI.$('guessInput'),
+            revealDisplay: ETUI.$('revealDisplay'),
+            feedback: ETUI.$('feedback'),
+            status: ETUI.$('status')
+        };
+
+        KEY_ORDER.forEach(function (k) {
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = k.replace('-', 'b');
+            el.keySelect.appendChild(opt);
+        });
+        el.keySelect.value = 'D';
+
+        SAMPLE_LABELS.forEach(function (label, i) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = label;
+            el.sampleSelect.appendChild(opt);
+        });
+
+        STRUCTURES.forEach(function (s, i) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = s.label;
+            el.structureSelect.appendChild(opt);
+        });
+
+        for (let n = CONFIG.MIN_LENGTH; n <= CONFIG.MAX_LENGTH; n++) {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            el.lengthSelect.appendChild(opt);
+        }
+        el.lengthSelect.value = CONFIG.DEFAULT_LENGTH;
+
+        const updateStats = ETUI.bindStats({
+            correct: 'correctCount',
+            wrong: 'wrongCount',
+            played: 'playedCount'
+        });
+
+        // ---- pitch sequence generation ----
+
+        // A Markov walk over one sample, exactly as reverse_tiul does, but
+        // collecting a run of notes rather than a single one.
+        function markovPitches(key, sampleIdx, count) {
+            const degrees = KEY_DEGREES[key];
+            const matrix = buildTransitionMatrix(SAMPLES[sampleIdx], degrees.length);
+
+            let index = 0;
+            const out = [degrees[0]];
+            for (let i = 1; i < count; i++) {
+                const row = matrix[index];
+                const sum = row.reduce((a, b) => a + b, 0);
+                if (sum === 0) break;          // dead end: stop early
+                const pitch = weightedChoice(degrees, row);
+                index = degrees.indexOf(pitch);
+                out.push(pitch);
+            }
+            return out;
+        }
+
+        // A known structure is a set of semitone offsets above the tonic.
+        function structurePitches(key, structure, count) {
+            const tonicMidi = tiulNameToMidi(KEY_DEGREES[key][0], CONFIG.BASE_OCTAVE);
+            const pool = structure.offsets.map(o => tonicMidi + o);
+            const out = [];
+            for (let i = 0; i < count; i++) {
+                out.push(pool[ET.randInt(pool.length)]);
+            }
+            return out;   // already MIDI, unlike the Markov branch
+        }
+
+        // "Keep the size limited to n registers. Notes will rotate to the
+        // other end if they fall off." - once the line leaves the window it
+        // wraps back in at the far end instead of climbing away.
+        function rotateIntoWindow(midi, low, span) {
+            let m = midi;
+            while (m >= low + span) m -= span;
+            while (m < low) m += span;
+            return m;
+        }
+
+        function applyMotion(midis, motion, low, span) {
+            const out = midis.slice();
+
+            if (motion === 'up' || motion === 'down') {
+                // Walk in one direction from the first note, rotating when
+                // the line runs past the register window.
+                let current = out[0];
+                const result = [current];
+                for (let i = 1; i < out.length; i++) {
+                    const step = motion === 'up'
+                        ? Math.abs(out[i] - out[i - 1]) || 1
+                        : -(Math.abs(out[i] - out[i - 1]) || 1);
+                    current = rotateIntoWindow(current + step, low, span);
+                    result.push(current);
+                }
+                return result;
+            }
+
+            if (motion === 'mixed') {
+                // Alternate direction each step.
+                let current = out[0];
+                const result = [current];
+                for (let i = 1; i < out.length; i++) {
+                    const size = Math.abs(out[i] - out[i - 1]) || 1;
+                    const step = (i % 2 === 1) ? size : -size;
+                    current = rotateIntoWindow(current + step, low, span);
+                    result.push(current);
+                }
+                return result;
+            }
+
+            // random: keep the drawn pitches, just fold them into the window
+            return out.map(m => rotateIntoWindow(m, low, span));
+        }
+
+        function generate() {
+            const key = el.keySelect.value;
+            const count = parseInt(el.lengthSelect.value, 10);
+            const registers = parseInt(el.registerSelect.value, 10);
+            const motion = el.motionSelect.value;
+            const span = 12 * registers;
+
+            const low = tiulNameToMidi(KEY_DEGREES[key][0], CONFIG.BASE_OCTAVE) - 12;
+            let midis, sourceLabel;
+
+            if (el.sourceSelect.value === 'structure') {
+                const structure = STRUCTURES[parseInt(el.structureSelect.value, 10)];
+                midis = structurePitches(key, structure, count);
+                sourceLabel = structure.label;
+            } else {
+                const sampleIdx = parseInt(el.sampleSelect.value, 10);
+                const names = markovPitches(key, sampleIdx, count);
+                midis = names.map(function (n) {
+                    // Spread the raw degrees across the register window.
+                    const base = tiulNameToMidi(n, CONFIG.BASE_OCTAVE);
+                    return base + 12 * ET.randInt(registers);
+                });
+                sourceLabel = 'sample ' + sampleIdx;
+            }
+
+            midis = applyMotion(midis, motion, low, span);
+            midis = midis.map(m => Math.max(CONFIG.LOW_LIMIT, Math.min(CONFIG.HIGH_LIMIT, m)));
+
+            return {
+                midis: midis,
+                names: midis.map(m => ET.midiToName(m)),
+                pcs: midis.map(m => ET.pitchClass(m)),
+                motion: motion,
+                source: sourceLabel,
+                registers: registers
+            };
+        }
+
+        function play(item, mode) {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            if (mode === 'first') {
+                ETUI.stopMelody();
+                TiulPiano.stopAll();
+                TiulPiano.play(item.midis[0], CONFIG.NOTE_DURATION * 2);
+                return;
+            }
+            ETUI.playMelody(item.midis, {
+                stepMs: parseInt(el.speedSelect.value, 10),
+                duration: CONFIG.NOTE_DURATION
+            });
+        }
+
+        function describe(item) {
+            return item.names.join(' ')
+                + '  |  ' + item.motion
+                + '  |  ' + item.source
+                + '  |  ' + item.registers + ' octave' + (item.registers > 1 ? 's' : '');
+        }
+
+        // Order matters, so this compares the sequence rather than a set.
+        function check(raw, item) {
+            const guessed = ET.parsePitchClasses(raw);
+            if (guessed === null) {
+                return { invalid: true, message: 'Could not read those note names.' };
+            }
+            if (guessed.length !== item.pcs.length) {
+                return {
+                    invalid: true,
+                    message: 'That is ' + guessed.length + ' note' + (guessed.length === 1 ? '' : 's')
+                        + ' — the line had ' + item.pcs.length + '.'
+                };
+            }
+
+            let hits = 0;
+            const marks = [];
+            for (let i = 0; i < guessed.length; i++) {
+                const ok = guessed[i] === item.pcs[i];
+                if (ok) hits++;
+                marks.push(ok ? '.' : 'x');
+            }
+
+            if (hits === item.pcs.length) {
+                return { correct: true, message: 'Correct — ' + describe(item) };
+            }
+            return {
+                correct: false,
+                message: hits + ' of ' + item.pcs.length + ' in place [' + marks.join('') + ']. '
+                    + 'It was ' + describe(item)
+            };
+        }
+
+        // ---- drill ----
+
+        const drill = ETDrill.create({
+            generate: generate,
+            play: play,
+            describe: describe,
+            check: check
+        });
+
+        function refresh() { updateStats(drill.state); }
+
+        function doPlay() { drill.play('melodic'); refresh(); }
+
+        // Replay does not count as another sequence.
+        function doAgain() {
+            const item = drill.current();
+            if (!item) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            play(item, 'melodic');
+        }
+
+        function doFirst() {
+            const item = drill.current();
+            if (!item) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            play(item, 'first');
+            ETUI.setText(el.revealDisplay, 'First: ' + item.names[0]);
+        }
+
+        function doNext() {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            el.guessInput.value = '';
+            drill.next();
+            refresh();
+        }
+
+        function doReveal() {
+            const text = drill.reveal();
+            if (text === null) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            ETUI.setText(el.revealDisplay, text);
+            refresh();
+        }
+
+        function doCheck() {
+            const result = drill.submit(el.guessInput.value);
+            ETUI.setFeedback(el.feedback, result.message, result.correct ? 'success' : 'error');
+            if (result.scored) {
+                el.guessInput.value = '';
+                el.guessInput.blur();
+            }
+            refresh();
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.againBtn.addEventListener('click', doAgain);
+        el.firstBtn.addEventListener('click', doFirst);
+        el.nextBtn.addEventListener('click', doNext);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.checkBtn.addEventListener('click', doCheck);
+
+        function updateSourceUI() {
+            const isStructure = el.sourceSelect.value === 'structure';
+            el.sampleLabel.style.display = isStructure ? 'none' : '';
+            el.structureLabel.style.display = isStructure ? '' : 'none';
+        }
+
+        el.sourceSelect.addEventListener('change', function () {
+            updateSourceUI();
+            ETUI.setText(el.status, 'Source changed. Press Next.');
+        });
+
+        [el.keySelect, el.sampleSelect, el.structureSelect, el.lengthSelect,
+            el.registerSelect, el.motionSelect].forEach(function (sel) {
+            sel.addEventListener('change', function () {
+                ETUI.setText(el.status, 'Setting changed. Press Next.');
+            });
+        });
+
+        ETUI.guessField(el.guessInput, doCheck);
+
+        ETUI.shortcuts({
+            P: doPlay,
+            A: doAgain,
+            F: doFirst,
+            N: doNext,
+            R: doReveal
+        });
+
+        updateSourceUI();
+        refresh();
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [CONFIG.LOW_LIMIT, 96],
+            readyMessage: 'Ready! Press Next for a line, or Play.'
+        });
+    })();
+</script>
+</body>
+</html>

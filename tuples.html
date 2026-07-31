@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Pitch Tuples - Ear Training</title>
+    <link rel="stylesheet" href="et-style.css"/>
+</head>
+
+<body>
+<div class="card">
+    <h1>Pitch Tuples &mdash; Ear Training</h1>
+
+    <div class="row">
+        <label>
+            Source
+            <select id="sourceSelect">
+                <option value="random">Random</option>
+                <option value="sample">Sample set (55 dyads)</option>
+            </select>
+        </label>
+        <label id="sizeLabel">
+            Notes
+            <select id="sizeSelect">
+                <option value="2">2 (interval)</option>
+                <option value="3">3 (triad)</option>
+                <option value="4">4 (7th chord)</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="mixed">Mixed 2&ndash;4</option>
+            </select>
+        </label>
+        <label class="test-mode-label">
+            <input type="checkbox" id="autoBass"/> Show bass on Play / Next
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="upBtn">Melody Up <span class="shortcut">(U)</span></button>
+        <button id="downBtn">Melody Down <span class="shortcut">(D)</span></button>
+    </div>
+
+    <div class="row">
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <button id="bassBtn">Bass <span class="shortcut">(B)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div class="row">
+        <label>
+            Your guess (the notes, in any order)
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. C E" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+        <span>Elapsed: <span id="elapsed">0s</span></span>
+        <span>Sizes: <span id="histogram">&mdash;</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>U</b>=Melody up, <b>D</b>=Melody down, <b>N</b>=Next, <b>R</b>=Reveal,
+        <b>B</b>=Bass note.<br/>
+        Name the notes in any order, separated by spaces or commas &mdash; no octaves needed.
+        Accepts <code>#</code> for sharp and <code>-</code> or <code>b</code> for flat, and enharmonics are
+        equivalent, so <code>D#</code> and <code>Eb</code> both work.
+        A pitch sounding in two octaves only needs naming once.<br/>
+        The sample set is the 55 dyads from <code>harmony_player.py</code>, played in their original order.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-drill.js"></script>
+<script src="et-ui.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/harmony_player.py.
+        //
+        // HarmonicPlayer is a player, not a generator: it walks a supplied
+        // list of pitch tuples in order with play / reveal / next, and its
+        // reveal names the tuple by size - interval, triad, 7th chord, then
+        // "n-note chord". Its closing summary reports how many were played,
+        // the elapsed time and a histogram of tuple sizes; all of that is in
+        // the stats row here, live rather than at quit.
+        //
+        // The 55 tuples in its main() are the real material, so they are
+        // kept verbatim as the sample set. Random generation is the other
+        // source, and answer checking is added as on the other pages.
+        // ============================================================
+
+        // sample_tuples from harmony_player.py main(), in order.
+        const SAMPLE_TUPLES = [
+            ['C4','E4'], ['G3','B3'], ['G#3','C4'], ['A3','C#4'], ['A#3','D4'], ['B3','D#4'],
+            ['C#4','F4'], ['G#3','C4'], ['A3','C#4'], ['D4','B4'], ['A3','F#4'], ['A#3','G4'],
+            ['D#4','E4'], ['F4','F#4'], ['F#4','G4'], ['G4','G#4'], ['D4','A4'], ['A3','E4'],
+            ['A#3','F4'], ['G3','E4'], ['E4','B4'], ['B3','G4'], ['G#4','B4'], ['A4','C5'],
+            ['A#4','C#5'], ['D4','E4'], ['G3','G4'], ['B3','F4'], ['C4','F#4'], ['C#4','G4'],
+            ['D4','G#4'], ['C4','E4'], ['G3','B3'], ['G#3','C4'], ['A3','C#4'], ['A#3','D4'],
+            ['B3','D#4'], ['B3','G4'], ['C4','F#4'], ['C#4','G4'], ['D4','G#4'], ['E4','A#4'],
+            ['C4','E4'], ['G4','C#5'], ['G#4','D5'], ['A4','D#5'], ['A#4','E5'], ['E4','A4'],
+            ['B3','E4'], ['C4','F4'], ['G3','D4'], ['D#4','F#4'], ['E4','G4'], ['G#3','G4'],
+            ['B2','G#3']
+        ];
+
+        const CONFIG = {
+            LOW_LIMIT: 45,
+            HIGH_LIMIT: 84,
+            MAX_SPREAD: 24,        // the sample dyads reach about two octaves
+            CHORD_DURATION: 2.5,
+            MELODY_STEP_MS: 380,
+            MELODY_NOTE_DURATION: 0.7
+        };
+
+        // _reveal_current_tuple names the tuple by its size.
+        function sizeName(n) {
+            if (n === 2) return 'interval';
+            if (n === 3) return 'triad';
+            if (n === 4) return '7th chord';
+            return n + '-note chord';
+        }
+
+        // ---- DOM ----
+
+        const el = {
+            sourceSelect: ETUI.$('sourceSelect'),
+            sizeSelect: ETUI.$('sizeSelect'),
+            sizeLabel: ETUI.$('sizeLabel'),
+            autoBass: ETUI.$('autoBass'),
+            playBtn: ETUI.$('playBtn'),
+            upBtn: ETUI.$('upBtn'),
+            downBtn: ETUI.$('downBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            bassBtn: ETUI.$('bassBtn'),
+            checkBtn: ETUI.$('checkBtn'),
+            guessInput: ETUI.$('guessInput'),
+            revealDisplay: ETUI.$('revealDisplay'),
+            feedback: ETUI.$('feedback'),
+            status: ETUI.$('status'),
+            elapsed: ETUI.$('elapsed'),
+            histogram: ETUI.$('histogram')
+        };
+
+        const updateStats = ETUI.bindStats({
+            correct: 'correctCount',
+            wrong: 'wrongCount',
+            played: 'playedCount'
+        });
+
+        // get_tuple_histogram + the elapsed time from _print_session_summary
+        const session = { startTime: Date.now(), sizes: {}, sampleIndex: 0 };
+
+        function recordSize(n) {
+            session.sizes[n] = (session.sizes[n] || 0) + 1;
+        }
+
+        function renderSummary() {
+            const secs = Math.round((Date.now() - session.startTime) / 1000);
+            el.elapsed.textContent = secs < 60
+                ? secs + 's'
+                : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+
+            const keys = Object.keys(session.sizes).sort();
+            el.histogram.innerHTML = keys.length
+                ? keys.map(k => k + '&times;' + session.sizes[k]).join(', ')
+                : '&mdash;';
+        }
+
+        // ---- generation ----
+
+        function randomTuple(size) {
+            const bottom = CONFIG.LOW_LIMIT
+                + ET.randInt(CONFIG.HIGH_LIMIT - CONFIG.MAX_SPREAD - CONFIG.LOW_LIMIT + 1);
+
+            // Distinct offsets above the bottom note, so no two voices collide.
+            const pool = [];
+            for (let i = 1; i <= CONFIG.MAX_SPREAD; i++) pool.push(i);
+            const picked = ET.shuffled(pool).slice(0, size - 1);
+
+            return [bottom].concat(picked.map(o => bottom + o)).sort((a, b) => a - b);
+        }
+
+        function generate() {
+            let midis, source;
+
+            if (el.sourceSelect.value === 'sample') {
+                // Walk the list in order, the way _next_tuple does.
+                const tuple = SAMPLE_TUPLES[session.sampleIndex % SAMPLE_TUPLES.length];
+                session.sampleIndex++;
+                midis = tuple.map(name => ET.nameToMidi(name)).sort((a, b) => a - b);
+                source = 'sample ' + ((session.sampleIndex - 1) % SAMPLE_TUPLES.length + 1)
+                    + '/' + SAMPLE_TUPLES.length;
+            } else {
+                const raw = el.sizeSelect.value;
+                const size = raw === 'mixed' ? 2 + ET.randInt(3) : parseInt(raw, 10);
+                midis = randomTuple(size);
+                source = 'random';
+            }
+
+            recordSize(midis.length);
+
+            return {
+                midis: midis,
+                names: midis.map(m => ET.midiToName(m)),
+                pcs: uniquePcs(midis),
+                source: source
+            };
+        }
+
+        // A pitch sounding in two octaves is one name to identify, so the
+        // answer is compared as a set of pitch classes.
+        function uniquePcs(midis) {
+            const seen = {};
+            const out = [];
+            midis.forEach(function (m) {
+                const pc = ET.pitchClass(m);
+                if (!seen[pc]) { seen[pc] = true; out.push(pc); }
+            });
+            return out.sort((a, b) => a - b);
+        }
+
+        function play(item, playMode) {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            const opts = {
+                stepMs: CONFIG.MELODY_STEP_MS,
+                duration: CONFIG.MELODY_NOTE_DURATION
+            };
+            if (playMode === 'up') {
+                ETUI.playMelody(item.midis, opts);
+            } else if (playMode === 'down') {
+                ETUI.playMelody(item.midis.slice().reverse(), opts);
+            } else {
+                ETUI.playChord(item.midis, CONFIG.CHORD_DURATION);
+            }
+        }
+
+        function describe(item) {
+            return sizeName(item.midis.length) + ': ' + item.names.join(' ')
+                + '  |  ' + item.source;
+        }
+
+        // ---- checking ----
+
+        function check(raw, item) {
+            const guessed = ET.parsePitchClasses(raw);
+            if (guessed === null) {
+                return { invalid: true, message: 'Could not read those note names.' };
+            }
+
+            const guessSet = {};
+            guessed.forEach(pc => { guessSet[pc] = true; });
+            const guessPcs = Object.keys(guessSet).map(Number).sort((a, b) => a - b);
+
+            const actual = item.pcs;
+            const hits = guessPcs.filter(pc => actual.indexOf(pc) !== -1).length;
+
+            if (hits === actual.length && guessPcs.length === actual.length) {
+                return { correct: true, message: 'Correct — ' + describe(item) };
+            }
+
+            const detail = hits + ' of ' + actual.length + ' right';
+            const extra = guessPcs.length > actual.length
+                ? ', ' + (guessPcs.length - actual.length) + ' too many'
+                : (guessPcs.length < actual.length
+                    ? ', ' + (actual.length - guessPcs.length) + ' missing'
+                    : '');
+
+            return { correct: false, message: detail + extra + '. It was ' + describe(item) };
+        }
+
+        // ---- drill ----
+
+        const drill = ETDrill.create({
+            generate: generate,
+            play: play,
+            describe: describe,
+            check: check
+        });
+
+        function refresh() {
+            updateStats(drill.state);
+            renderSummary();
+        }
+
+        function doBass() {
+            const item = drill.current();
+            if (!item) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            ETUI.setText(el.revealDisplay, 'Bass: ' + item.names[0]);
+        }
+
+        function doPlay() {
+            drill.play('harmonic');
+            if (el.autoBass.checked) doBass();
+            refresh();
+        }
+
+        function doUp() { drill.play('up'); refresh(); }
+        function doDown() { drill.play('down'); refresh(); }
+
+        function doNext() {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            el.guessInput.value = '';
+            drill.next();
+            if (el.autoBass.checked) doBass();
+            refresh();
+        }
+
+        function doReveal() {
+            const text = drill.reveal();
+            if (text === null) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            ETUI.setText(el.revealDisplay, text);
+            refresh();
+        }
+
+        function doCheck() {
+            const result = drill.submit(el.guessInput.value);
+            ETUI.setFeedback(el.feedback, result.message, result.correct ? 'success' : 'error');
+            if (result.scored) {
+                el.guessInput.value = '';
+                el.guessInput.blur();
+            }
+            refresh();
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.upBtn.addEventListener('click', doUp);
+        el.downBtn.addEventListener('click', doDown);
+        el.nextBtn.addEventListener('click', doNext);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.bassBtn.addEventListener('click', doBass);
+        el.checkBtn.addEventListener('click', doCheck);
+
+        // The size control only means anything for generated tuples.
+        function updateSourceUI() {
+            const isSample = el.sourceSelect.value === 'sample';
+            el.sizeLabel.style.opacity = isSample ? 0.4 : 1;
+            el.sizeSelect.disabled = isSample;
+            ETUI.setText(el.status, isSample
+                ? 'Sample set: 55 dyads in their original order. Press Next.'
+                : 'Random tuples. Press Next.');
+        }
+
+        el.sourceSelect.addEventListener('change', function () {
+            session.sampleIndex = 0;
+            drill.reset();
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            el.guessInput.value = '';
+            updateSourceUI();
+            refresh();
+        });
+
+        el.sizeSelect.addEventListener('change', function () {
+            ETUI.setText(el.status, 'Size set to ' + el.sizeSelect.value + '. Press Next.');
+        });
+
+        ETUI.guessField(el.guessInput, doCheck);
+
+        ETUI.shortcuts({
+            P: doPlay,
+            U: doUp,
+            D: doDown,
+            N: doNext,
+            R: doReveal,
+            B: doBass
+        });
+
+        updateSourceUI();
+        refresh();
+        setInterval(renderSummary, 1000);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [CONFIG.LOW_LIMIT, 96],
+            readyMessage: 'Ready! Press Next for a tuple, or Play.'
+        });
+    })();
+</script>
+</body>
+</html>
