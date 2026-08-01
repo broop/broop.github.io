@@ -1,27 +1,28 @@
-- <a href="https://broop.github.io/tiul.html" target="_blank">Tiul - Ear Training</a>
-- <a href="https://broop.github.io/reverse_tiul.html" target="_blank">Reverse Tiul - Markov Ear Training</a>
+- <a href="https://broop.github.io/et/tiul.html" target="_blank">Tiul - Ear Training</a>
+- <a href="https://broop.github.io/et/reverse_tiul.html" target="_blank">Reverse Tiul - Markov Ear Training</a>
 
-- <a href="https://broop.github.io/chromatic_clusters.html" target="_blank">Chromatic Clusters - Ear Training</a>
-- <a href="https://broop.github.io/chord_colors.html" target="_blank">Chord Colors - Ear Training</a>
-- <a href="https://broop.github.io/clefs.html" target="_blank">Clef Trainer (Single Note)</a>
-- <a href="https://broop.github.io/mode_sig.html" target="_blank">Modal Key Signature Trainer</a>
-- <a href="https://broop.github.io/directions_for_2.html" target="_blank">Directions for 2 - Movement Ear Training</a>
-- <a href="https://broop.github.io/directions_for_2_v2.html" target="_blank">Directions for 2 v2 - Movement Ear Training (React)</a>
-- <a href="https://broop.github.io/play_check.html" target="_blank">Play Check</a>
-- <a href="https://broop.github.io/player.html" target="_blank">Note & Triad Player</a>
-- <a href="https://broop.github.io/tiul_for_2.html" target="_blank">Tiul for 2 - Diad Ear Training</a>
-- <a href="https://broop.github.io/transposition.html" target="_blank">Transposition Trainer</a>
+- <a href="https://broop.github.io/et/chromatic_clusters.html" target="_blank">Chromatic Clusters - Ear Training</a>
+- <a href="https://broop.github.io/et/chord_colors.html" target="_blank">Chord Colors - Ear Training</a>
+- <a href="https://broop.github.io/et/clefs.html" target="_blank">Clef Trainer (Single Note)</a>
+- <a href="https://broop.github.io/et/mode_sig.html" target="_blank">Modal Key Signature Trainer</a>
+- <a href="https://broop.github.io/et/directions_for_2.html" target="_blank">Directions for 2 - Movement Ear Training</a>
+- <a href="https://broop.github.io/et/directions_for_2_v2.html" target="_blank">Directions for 2 v2 - Movement Ear Training (React)</a>
+- <a href="https://broop.github.io/et/directions_for_2_v3.html" target="_blank">Directions for 2 v3 - Movement Ear Training (Vanilla JS)</a>
+- <a href="https://broop.github.io/et/play_check.html" target="_blank">Play Check</a>
+- <a href="https://broop.github.io/et/player.html" target="_blank">Note & Triad Player</a>
+- <a href="https://broop.github.io/et/tiul_for_2.html" target="_blank">Tiul for 2 - Diad Ear Training</a>
+- <a href="https://broop.github.io/et/transposition.html" target="_blank">Transposition Trainer</a>
 
-- <a href="https://broop.github.io/sevenths.html" target="_blank">7th Chords - Ear Training</a>
-- <a href="https://broop.github.io/triads.html" target="_blank">Triads - Ear Training</a>
-- <a href="https://broop.github.io/quartal.html" target="_blank">Quartal &amp; Quintal Harmony - Ear Training</a>
-- <a href="https://broop.github.io/clusters.html" target="_blank">Clusters - Ear Training</a>
-- <a href="https://broop.github.io/position.html" target="_blank">Position (Matzav) - Ear Training</a>
-- <a href="https://broop.github.io/tuples.html" target="_blank">Pitch Tuples - Ear Training</a>
-- <a href="https://broop.github.io/reverse_tiul_multi.html" target="_blank">Reverse Tiul Multi - Weighted Markov Ear Training</a>
-- <a href="https://broop.github.io/melodic_tiul.html" target="_blank">Melodic Tiul - Ear Training</a>
-- <a href="https://broop.github.io/repetitions.html" target="_blank">Repetitions - Ear Training</a>
-- <a href="https://broop.github.io/progressions.html" target="_blank">Progressions (SATB) - Ear Training</a>
-- <a href="https://broop.github.io/bach_progressions.html" target="_blank">Bach Progressions - Ear Training</a>
-- <a href="https://broop.github.io/hindy.html" target="_blank">Hindy - Dictation Training</a>
-- <a href="https://broop.github.io/nachashim.html" target="_blank">Nachashim - Melodic Dictation</a>
+- <a href="https://broop.github.io/et/sevenths.html" target="_blank">7th Chords - Ear Training</a>
+- <a href="https://broop.github.io/et/triads.html" target="_blank">Triads - Ear Training</a>
+- <a href="https://broop.github.io/et/quartal.html" target="_blank">Quartal &amp; Quintal Harmony - Ear Training</a>
+- <a href="https://broop.github.io/et/clusters.html" target="_blank">Clusters - Ear Training</a>
+- <a href="https://broop.github.io/et/position.html" target="_blank">Position (Matzav) - Ear Training</a>
+- <a href="https://broop.github.io/et/tuples.html" target="_blank">Pitch Tuples - Ear Training</a>
+- <a href="https://broop.github.io/et/reverse_tiul_multi.html" target="_blank">Reverse Tiul Multi - Weighted Markov Ear Training</a>
+- <a href="https://broop.github.io/et/melodic_tiul.html" target="_blank">Melodic Tiul - Ear Training</a>
+- <a href="https://broop.github.io/et/repetitions.html" target="_blank">Repetitions - Ear Training</a>
+- <a href="https://broop.github.io/et/progressions.html" target="_blank">Progressions (SATB) - Ear Training</a>
+- <a href="https://broop.github.io/et/bach_progressions.html" target="_blank">Bach Progressions - Ear Training</a>
+- <a href="https://broop.github.io/et/hindy.html" target="_blank">Hindy - Dictation Training</a>
+- <a href="https://broop.github.io/et/nachashim.html" target="_blank">Nachashim - Melodic Dictation</a>
