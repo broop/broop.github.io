@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Bach Progressions - Ear Training</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .satb-table {
+            border-collapse: collapse;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .satb-table th, .satb-table td {
+            border: 1px solid #e5e9f2;
+            padding: 6px 14px;
+            text-align: center;
+        }
+
+        .satb-table th {
+            background: #f8f9fb;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
+        .satb-table td.voice {
+            background: #f8f9fb;
+            font-weight: 600;
+            color: #555;
+            text-align: right;
+        }
+
+        .source-line {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .source-line b { color: #2563eb; }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Bach Progressions &mdash; Ear Training</h1>
+
+    <div class="row">
+        <label>
+            Pattern
+            <select id="patternSelect"></select>
+        </label>
+        <label>
+            Order
+            <select id="orderSelect">
+                <option value="sequential">Sequential (by Riemenschneider)</option>
+                <option value="random">Random</option>
+            </select>
+        </label>
+        <span id="progress" class="shortcut" style="align-self:center"></span>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="melodicBtn">Melodic <span class="shortcut">(M)</span></button>
+        <button id="bassBtn">Bass line <span class="shortcut">(B)</span></button>
+        <button id="sopranoBtn">Soprano <span class="shortcut">(S)</span></button>
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div id="satbContainer"></div>
+    <div id="sourceLine" class="source-line"></div>
+
+    <div class="row" style="margin-top:14px">
+        <label>
+            Your guess (the progression)
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. I V I" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Played: <span id="playedCount">0</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>M</b>=Melodic, <b>B</b>=Bass line, <b>S</b>=Soprano line, <b>N</b>=Next,
+        <b>R</b>=Reveal.<br/>
+        Every example is a real SATB voicing lifted from the Bach chorale corpus, in its original key, ordered by
+        Riemenschneider number. With <b>Pattern: any</b>, name the progression you hear &mdash; base numerals are
+        enough (<code>I V I</code> matches a minor-key <code>i v i</code> and ignores figures), matching how the
+        corpus search itself works.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-drill.js"></script>
+<script src="et-ui.js"></script>
+<script src="bach_progressions-data.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/progressions_chorale.py.
+        //
+        // The Python extracts progressions from the music21 Bach corpus at
+        // startup ("this may take a minute"). Here the extraction is done
+        // once, offline, by src/export_bach_progressions.py in the
+        // ear-trainer repo, which writes bach_progressions-data.js - the
+        // same convention as play_check-data.js. Each example keeps its
+        // source: chorale, Riemenschneider number, key and bar.
+        //
+        // The corpus matcher compares base numerals case-insensitively and
+        // ignores figures (roman_matches), which is why a minor-key i-v-i
+        // or an iv43 shows up under I-V-I / I-IV-V-I. The answer check here
+        // applies the same leniency, and the reveal shows the numerals as
+        // analysed.
+        //
+        // The Python's sequential walk through examples (get_progression)
+        // is the default order; random is added. Answer checking is added
+        // as on the other pages - the Python had only reveal.
+        // ============================================================
+
+        const CONFIG = {
+            CHORD_DURATION: 1.6,
+            CHORD_STEP_MS: 1800,
+            MELODY_STEP_MS: 350,
+            LINE_STEP_MS: 900
+        };
+
+        const PATTERNS = Object.keys(BACH_PROGRESSIONS);
+        const VOICE_ROWS = ['soprano', 'alto', 'tenor', 'bass'];   // display order
+
+        // ---- DOM ----
+
+        const el = {
+            patternSelect: ETUI.$('patternSelect'),
+            orderSelect: ETUI.$('orderSelect'),
+            progress: ETUI.$('progress'),
+            playBtn: ETUI.$('playBtn'),
+            melodicBtn: ETUI.$('melodicBtn'),
+            bassBtn: ETUI.$('bassBtn'),
+            sopranoBtn: ETUI.$('sopranoBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            checkBtn: ETUI.$('checkBtn'),
+            guessInput: ETUI.$('guessInput'),
+            revealDisplay: ETUI.$('revealDisplay'),
+            satbContainer: ETUI.$('satbContainer'),
+            sourceLine: ETUI.$('sourceLine'),
+            feedback: ETUI.$('feedback'),
+            status: ETUI.$('status')
+        };
+
+        const anyOpt = document.createElement('option');
+        anyOpt.value = 'any';
+        anyOpt.textContent = 'any';
+        el.patternSelect.appendChild(anyOpt);
+        PATTERNS.forEach(function (p) {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p + ' (' + BACH_PROGRESSIONS[p].length + ')';
+            el.patternSelect.appendChild(opt);
+        });
+
+        const updateStats = ETUI.bindStats({
+            correct: 'correctCount',
+            wrong: 'wrongCount',
+            played: 'playedCount'
+        });
+
+        // Sequential cursor per pattern, like extractor.current_index.
+        const cursor = {};
+        PATTERNS.forEach(p => { cursor[p] = 0; });
+
+        function updateProgress() {
+            if (el.patternSelect.value === 'any' || el.orderSelect.value === 'random') {
+                el.progress.textContent = '';
+                return;
+            }
+            const p = el.patternSelect.value;
+            el.progress.textContent = cursor[p] + ' / ' + BACH_PROGRESSIONS[p].length + ' seen';
+        }
+
+        // ---- generation ----
+
+        function generate() {
+            const chosen = el.patternSelect.value === 'any'
+                ? ET.choice(PATTERNS)
+                : el.patternSelect.value;
+            const rows = BACH_PROGRESSIONS[chosen];
+
+            let idx;
+            if (el.orderSelect.value === 'sequential' && el.patternSelect.value !== 'any') {
+                idx = cursor[chosen] % rows.length;      // wrap at the end
+                cursor[chosen]++;
+            } else {
+                idx = ET.randInt(rows.length);
+            }
+
+            return { pattern: chosen, example: rows[idx], index: idx };
+        }
+
+        let chordTimers = [];
+
+        function stopChords() {
+            chordTimers.forEach(clearTimeout);
+            chordTimers = [];
+        }
+
+        function play(item, mode) {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            stopChords();
+            ETUI.stopMelody();
+            TiulPiano.stopAll();
+
+            const voicings = item.example.voicings;
+
+            if (mode === 'bass') {
+                ETUI.playMelody(voicings.map(v => v.midis[0]), { stepMs: CONFIG.LINE_STEP_MS, duration: 0.85 });
+                return;
+            }
+            if (mode === 'soprano') {
+                ETUI.playMelody(voicings.map(v => v.midis[3]), { stepMs: CONFIG.LINE_STEP_MS, duration: 0.85 });
+                return;
+            }
+            if (mode === 'melodic') {
+                const seq = [];
+                voicings.forEach(v => v.midis.forEach(m => seq.push(m)));
+                ETUI.playMelody(seq, { stepMs: CONFIG.MELODY_STEP_MS, duration: 0.6 });
+                return;
+            }
+
+            voicings.forEach(function (v, i) {
+                chordTimers.push(setTimeout(function () {
+                    TiulPiano.playChord(v.midis, CONFIG.CHORD_DURATION);
+                }, i * CONFIG.CHORD_STEP_MS));
+            });
+        }
+
+        // ---- reveal ----
+
+        function displayName(name) {
+            return name.replace(/-/g, 'b');
+        }
+
+        function renderSATB(item) {
+            const voicings = item.example.voicings;
+            let html = '<table class="satb-table"><tr><th></th>';
+            voicings.forEach(function (v) {
+                html += '<th>' + v.rn + '</th>';
+            });
+            html += '</tr>';
+
+            VOICE_ROWS.forEach(function (voice, r) {
+                const idx = 3 - r;   // names/midis are bass -> soprano
+                html += '<tr><td class="voice">' + voice[0].toUpperCase() + '</td>';
+                voicings.forEach(function (v) {
+                    html += '<td>' + displayName(v.names[idx]) + '</td>';
+                });
+                html += '</tr>';
+            });
+            html += '</table>';
+            el.satbContainer.innerHTML = html;
+        }
+
+        function describe(item) {
+            const e = item.example;
+            const riem = e.riemenschneider != null ? 'R' + e.riemenschneider : '?';
+            return item.pattern + ' in ' + e.key
+                + '  |  ' + riem + (e.title ? ': ' + e.title : '')
+                + '  |  m. ' + e.measure;
+        }
+
+        // ---- checking (roman_matches leniency) ----
+
+        function baseNumeral(rn) {
+            return rn.replace(/[0-9#b]+/g, '').trim().toUpperCase();
+        }
+
+        function check(raw, item) {
+            const tokens = (raw || '').trim().split(/[\s,\->]+/).filter(t => t.length > 0);
+            if (tokens.length === 0) {
+                return { invalid: true, message: 'Name the progression first.' };
+            }
+
+            const target = item.pattern.split('-');
+            if (tokens.length !== target.length) {
+                return {
+                    invalid: true,
+                    message: 'That is ' + tokens.length + ' chords — this pattern has ' + target.length + '.'
+                };
+            }
+
+            let hits = 0;
+            for (let i = 0; i < target.length; i++) {
+                if (baseNumeral(tokens[i]) === baseNumeral(target[i])) hits++;
+            }
+
+            if (hits === target.length) {
+                return { correct: true, message: 'Correct — ' + describe(item) };
+            }
+            return {
+                correct: false,
+                message: hits + ' of ' + target.length + ' chords right. It was ' + describe(item)
+            };
+        }
+
+        // ---- drill ----
+
+        const drill = ETDrill.create({
+            generate: generate,
+            play: play,
+            describe: describe,
+            check: check
+        });
+
+        function refresh() {
+            updateStats(drill.state);
+            updateProgress();
+        }
+
+        function doPlay() { drill.play('harmonic'); refresh(); }
+        function doMelodic() { drill.play('melodic'); refresh(); }
+        function doBassLine() { drill.play('bass'); refresh(); }
+        function doSoprano() { drill.play('soprano'); refresh(); }
+
+        function doNext() {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            el.satbContainer.innerHTML = '';
+            el.sourceLine.innerHTML = '';
+            el.guessInput.value = '';
+            drill.next();
+            refresh();
+        }
+
+        function doReveal() {
+            const item = drill.current();
+            if (!item) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            drill.reveal();
+            const e = item.example;
+            ETUI.setText(el.revealDisplay, item.pattern + ' in ' + e.key);
+            renderSATB(item);
+            const riem = e.riemenschneider != null ? 'R' + e.riemenschneider : '?';
+            el.sourceLine.innerHTML = '<b>' + riem + '</b>'
+                + (e.title ? ' — ' + e.title : '')
+                + '  (' + e.chorale + ', m. ' + e.measure + ')';
+            refresh();
+        }
+
+        function doCheck() {
+            const result = drill.submit(el.guessInput.value);
+            ETUI.setFeedback(el.feedback, result.message, result.correct ? 'success' : 'error');
+            if (result.scored) {
+                el.guessInput.value = '';
+                el.guessInput.blur();
+            }
+            refresh();
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.melodicBtn.addEventListener('click', doMelodic);
+        el.bassBtn.addEventListener('click', doBassLine);
+        el.sopranoBtn.addEventListener('click', doSoprano);
+        el.nextBtn.addEventListener('click', doNext);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.checkBtn.addEventListener('click', doCheck);
+
+        el.patternSelect.addEventListener('change', function () {
+            updateProgress();
+            ETUI.setText(el.status, 'Pattern: ' + el.patternSelect.value + '. Press Next.');
+        });
+        el.orderSelect.addEventListener('change', updateProgress);
+
+        ETUI.guessField(el.guessInput, doCheck);
+
+        ETUI.shortcuts({
+            P: doPlay,
+            M: doMelodic,
+            B: doBassLine,
+            S: doSoprano,
+            N: doNext,
+            R: doReveal
+        });
+
+        refresh();
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [36, 84],
+            readyMessage: 'Ready! ' + PATTERNS.map(p => p + ' (' + BACH_PROGRESSIONS[p].length + ')').join(', ')
+                + '. Press Next.'
+        });
+    })();
+</script>
+</body>
+</html>

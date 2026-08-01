@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clef Trainer (Single Note)</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      body { margin: 24px; background: #f6f7f9; color: #111; }
+      .card {
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 14px;
+        padding: 16px 16px 18px;
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+      }
+      h1 { margin: 0 0 12px; font-size: 18px; }
+      .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+      .row + .row { margin-top: 10px; }
+      label { display: grid; gap: 6px; font-size: 14px; }
+      select, input {
+        font-size: 14px;
+        padding: 8px 10px;
+        border: 1px solid #cfd6e4;
+        border-radius: 10px;
+      }
+      select:focus-visible, input:focus-visible {
+        outline: 2px solid #4a7aed;
+        outline-offset: 1px;
+      }
+      input[type="number"] { width: 110px; }
+      button {
+        font-size: 14px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cfd6e4;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:hover { background: #f0f3f8; }
+      #score {
+        margin-top: 12px;
+        border: 1px solid #e5e9f2;
+        border-radius: 12px;
+        padding: 10px;
+        min-height: 170px;
+      }
+      .hint { margin-top: 6px; font-size: 12px; color: #555; }
+      .feedback { margin-top: 10px; min-height: 22px; font-size: 14px; }
+      .stats { margin-top: 10px; display: flex; gap: 18px; font-size: 13px; color: #333; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .pill {
+        font-size: 12px;
+        padding: 3px 8px;
+        border: 1px solid #cfd6e4;
+        border-radius: 999px;
+        background: #fff;
+        color: #333;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h1>Clef Trainer</h1>
+
+      <div class="row">
+        <label>
+          Clef
+          <select id="clefSelect">
+            <option value="treble">Treble</option>
+            <option value="bass">Bass</option>
+            <option value="alto">Alto</option>
+            <option value="tenor">Tenor</option>
+            <option value="soprano">Soprano</option>
+          </select>
+        </label>
+
+        <button id="newBtn" type="button">New note</button>
+
+        <label>
+          Your guess (e.g., C#4 / Db3 / D-3)
+          <input id="guess" class="mono" type="text" placeholder="C#4" autocomplete="off" />
+        </label>
+
+        <button id="checkBtn" type="button">Check</button>
+      </div>
+
+      <div class="row">
+        <label>
+          Min octave
+          <input id="minOct" type="number" step="1" />
+        </label>
+        <label>
+          Max octave
+          <input id="maxOct" type="number" step="1" />
+        </label>
+
+        <button id="resetRangesBtn" type="button">Reset defaults</button>
+
+        <span class="pill">Range applies per clef</span>
+      </div>
+
+      <div class="hint">
+        Format: <span class="mono">A–G</span> + optional <span class="mono">#</span> or <span class="mono">b</span> or <span class="mono">-</span> + octave
+        (e.g. <span class="mono">F3</span>, <span class="mono">C#4</span>, <span class="mono">Db3</span>, <span class="mono">D-3</span>).
+        Enharmonics are treated as different answers: <span class="mono">C#4</span> ≠ <span class="mono">Db4</span>.
+      </div>
+
+      <div id="score"></div>
+
+      <div id="feedback" class="feedback"></div>
+
+      <div class="stats">
+        <span>Correct: <span id="ok">0</span></span>
+        <span>Wrong: <span id="bad">0</span></span>
+      </div>
+    </div>
+
+    <!-- VexFlow 4.x prebundled build that exposes global Vex.Flow -->
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/releases/vexflow-min.js"></script>
+
+    <script>
+      (function () {
+        // DOM
+        const clefSelect = document.getElementById("clefSelect");
+        const newBtn = document.getElementById("newBtn");
+        const checkBtn = document.getElementById("checkBtn");
+        const guessInput = document.getElementById("guess");
+        const scoreDiv = document.getElementById("score");
+        const feedbackDiv = document.getElementById("feedback");
+        const okSpan = document.getElementById("ok");
+        const badSpan = document.getElementById("bad");
+
+        const minOctInput = document.getElementById("minOct");
+        const maxOctInput = document.getElementById("maxOct");
+        const resetRangesBtn = document.getElementById("resetRangesBtn");
+
+        function setFeedback(msg) { feedbackDiv.textContent = msg; }
+
+        // VexFlow check
+        if (typeof Vex === "undefined" || !Vex.Flow) {
+          setFeedback("VexFlow did not load. Check your internet connection or the CDN URL.");
+          return;
+        }
+        const VF = Vex.Flow;
+
+        // Persistent renderer (created once, cleared and redrawn each note)
+        const renderer = new VF.Renderer(scoreDiv, VF.Renderer.Backends.SVG);
+        renderer.resize(540, 170);
+
+        // State
+        let answer = null; // e.g. "C#4"
+        let ok = 0;
+        let bad = 0;
+        let autoAdvanceTimer = null;
+
+        // Random note pieces
+        const LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+
+        // Default per-clef octave ranges (you can edit these in-app)
+        const DEFAULT_RANGES = {
+          treble:  { minOct: 4, maxOct: 5 },
+          bass:    { minOct: 2, maxOct: 4 },
+          alto:    { minOct: 3, maxOct: 5 },
+          tenor:   { minOct: 3, maxOct: 5 },
+          soprano: { minOct: 4, maxOct: 5 },
+        };
+
+        function cloneDefaults() {
+          const clone = {};
+          for (const k in DEFAULT_RANGES) {
+            clone[k] = { ...DEFAULT_RANGES[k] };
+          }
+          return clone;
+        }
+
+        // Active ranges (per clef)
+        const ranges = cloneDefaults();
+
+        // Helpers
+        function randInt(min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function choice(arr) {
+          return arr[randInt(0, arr.length - 1)];
+        }
+
+        function randomAccidental() {
+          const r = Math.random();
+          if (r < 1 / 6) return "#";
+          if (r < 2 / 6) return "b";
+          return "";
+        }
+
+        function updateStats() {
+          okSpan.textContent = String(ok);
+          badSpan.textContent = String(bad);
+        }
+
+        // Accept flats as either "b" or "-" (normalize "-" -> "b"). Sharps always "#".
+        function normalizeGuess(s) {
+          const t = (s || "").trim();
+          if (!t) return { ok: false, msg: 'Type a pitch like "C4", "C#4", "Db3", or "D-3".' };
+
+          const m = /^([A-Ga-g])\s*([#b-]?)\s*(-?\d+)$/.exec(t);
+          if (!m) return { ok: false, msg: 'Use format like "C4", "C#4", "Db3", or "D-3".' };
+
+          const letter = m[1].toUpperCase();
+          let acc = m[2] || "";
+          const octave = m[3];
+
+          if (acc === "-") acc = "b";
+          return { ok: true, pitch: `${letter}${acc}${octave}` };
+        }
+
+        function parsePitch(pitch) {
+          const m = /^([A-G])([#b-]?)(-?\d+)$/.exec(pitch);
+          if (!m) return { letter: "C", acc: "", octave: "4" };
+
+          let acc = m[2] || "";
+          if (acc === "-") acc = "b";
+          return { letter: m[1], acc, octave: m[3] };
+        }
+
+        function pitchToVexKey(parsed) {
+          return (parsed.letter.toLowerCase() + parsed.acc + "/" + parsed.octave);
+        }
+
+        function getRangeForClef(clef) {
+          const r = ranges[clef] || ranges.treble;
+
+          let minOct = Number(r.minOct);
+          let maxOct = Number(r.maxOct);
+
+          if (!Number.isFinite(minOct)) minOct = DEFAULT_RANGES[clef]?.minOct ?? 4;
+          if (!Number.isFinite(maxOct)) maxOct = DEFAULT_RANGES[clef]?.maxOct ?? 5;
+
+          if (minOct > maxOct) {
+            const tmp = minOct;
+            minOct = maxOct;
+            maxOct = tmp;
+          }
+          return { minOct, maxOct };
+        }
+
+        function pickRandomPitch(clef) {
+          const r = getRangeForClef(clef);
+          const letter = choice(LETTERS);
+          const acc = randomAccidental();
+          const octave = randInt(r.minOct, r.maxOct);
+          return `${letter}${acc}${octave}`;
+        }
+
+        function renderOneNote(clef, pitch) {
+          try {
+            const context = renderer.getContext();
+            context.clear();
+            context.setFont("Arial", 10, "");
+
+            const stave = new VF.Stave(10, 30, 500);
+            stave.addClef(clef);
+            stave.setContext(context).draw();
+
+            const p = parsePitch(pitch);
+            const key = pitchToVexKey(p);
+
+            const note = new VF.StaveNote({
+              clef: clef,
+              keys: [key],
+              duration: "q",
+            });
+
+            if (p.acc) {
+              note.addAccidental(0, new VF.Accidental(p.acc));
+            }
+
+            const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+            voice.setMode(VF.Voice.Mode.SOFT); // allow incomplete measure
+            voice.addTickables([note]);
+
+            new VF.Formatter().joinVoices([voice]).format([voice], 350);
+            voice.draw(context, stave);
+          } catch (e) {
+            setFeedback("Render error: " + (e && e.message ? e.message : String(e)));
+          }
+        }
+
+        // Range input change listeners (added/removed during sync to avoid recursion)
+        function onMinOctChange() { applyRangeFromInputs(false); }
+        function onMaxOctChange() { applyRangeFromInputs(false); }
+
+        function addRangeListeners() {
+          minOctInput.addEventListener("change", onMinOctChange);
+          maxOctInput.addEventListener("change", onMaxOctChange);
+        }
+
+        function removeRangeListeners() {
+          minOctInput.removeEventListener("change", onMinOctChange);
+          maxOctInput.removeEventListener("change", onMaxOctChange);
+        }
+
+        function syncRangeInputsFromClef() {
+          const clef = clefSelect.value;
+          const r = getRangeForClef(clef);
+
+          removeRangeListeners();
+          minOctInput.value = String(r.minOct);
+          maxOctInput.value = String(r.maxOct);
+          addRangeListeners();
+        }
+
+        function applyRangeFromInputs(shouldStartNewRound) {
+          const clef = clefSelect.value;
+
+          const minOct = parseInt(minOctInput.value, 10);
+          const maxOct = parseInt(maxOctInput.value, 10);
+
+          if (!Number.isFinite(minOct) || !Number.isFinite(maxOct)) {
+            setFeedback("Range error: min and max octave must be integers.");
+            return;
+          }
+
+          // Store as numbers, ordered
+          ranges[clef] = { minOct: Math.min(minOct, maxOct), maxOct: Math.max(minOct, maxOct) };
+
+          if (shouldStartNewRound) newRound();
+        }
+
+        function resetRanges() {
+          const defaults = cloneDefaults();
+          for (const k in defaults) {
+            ranges[k] = defaults[k];
+          }
+          setFeedback("Ranges reset to defaults.");
+          syncRangeInputsFromClef();
+          newRound();
+        }
+
+        function cancelAutoAdvance() {
+          if (autoAdvanceTimer !== null) {
+            clearTimeout(autoAdvanceTimer);
+            autoAdvanceTimer = null;
+          }
+        }
+
+        function newRound() {
+          cancelAutoAdvance();
+
+          const clef = clefSelect.value;
+
+          answer = pickRandomPitch(clef);
+
+          renderOneNote(clef, answer);
+          setFeedback("");
+          guessInput.value = "";
+          guessInput.focus();
+        }
+
+        function check() {
+          if (!answer) return;
+
+          const parsed = normalizeGuess(guessInput.value);
+          if (!parsed.ok) { setFeedback(parsed.msg); return; }
+
+          // Exact-match answer policy (enharmonics different)
+          if (parsed.pitch.toUpperCase() === answer.toUpperCase()) {
+            ok++;
+            setFeedback("Correct!");
+            updateStats();
+            // Auto-advance after a short delay
+            cancelAutoAdvance();
+            autoAdvanceTimer = setTimeout(newRound, 1200);
+          } else {
+            bad++;
+            setFeedback("Wrong. Correct answer: " + answer);
+            updateStats();
+          }
+        }
+
+        // Wire up UI
+        newBtn.addEventListener("click", newRound);
+        checkBtn.addEventListener("click", check);
+
+        clefSelect.addEventListener("change", () => {
+          syncRangeInputsFromClef();
+          newRound();
+        });
+
+        resetRangesBtn.addEventListener("click", resetRanges);
+
+        // Auto-apply range whenever user changes min/max
+        addRangeListeners();
+
+        guessInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            // If auto-advance is pending (answer was already checked correct),
+            // skip the delay and advance immediately
+            if (autoAdvanceTimer !== null) {
+              newRound();
+            } else {
+              check();
+            }
+          }
+        });
+
+        // Start
+        updateStats();
+        syncRangeInputsFromClef();
+        newRound();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1076 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Directions for 2 - Movement Ear Training</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0c0e14;
+            --card-bg: #13161f;
+            --card-border: rgba(255,255,255,0.06);
+            --surface: #1a1e2a;
+            --surface-hover: #222737;
+            --text: #e4e6ed;
+            --text-dim: #7a7f94;
+            --text-muted: #4e5268;
+            --accent: #6c8cff;
+            --accent-glow: rgba(108,140,255,0.25);
+            --accent-hover: #849dff;
+            --green: #34d399;
+            --green-glow: rgba(52,211,153,0.2);
+            --red: #f87171;
+            --red-glow: rgba(248,113,113,0.2);
+            --amber: #fbbf24;
+            --radius: 14px;
+            --radius-sm: 10px;
+            --font: 'Inter', system-ui, -apple-system, sans-serif;
+            --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 32px 20px;
+            background-image:
+                radial-gradient(ellipse 80% 60% at 50% -20%, rgba(108,140,255,0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139,92,246,0.06), transparent);
+        }
+
+        /* ---- CARD ---- */
+        .card {
+            max-width: 940px;
+            width: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 32px 36px 36px;
+            box-shadow:
+                0 4px 24px rgba(0,0,0,0.3),
+                0 0 0 1px rgba(255,255,255,0.03) inset;
+            animation: cardIn 0.5s ease-out;
+        }
+
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(16px) scale(0.98); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ---- HEADER ---- */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        h1 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, var(--text), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .key-select-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dim);
+        }
+
+        select {
+            font-family: var(--font);
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 14px;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%237a7f94' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
+        }
+
+        select:focus-visible {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* ---- BUTTONS ---- */
+        button {
+            font-family: var(--font);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 10px 18px;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.08);
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+            pointer-events: none;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--surface-hover);
+            border-color: rgba(255,255,255,0.12);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .shortcut {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-left: 4px;
+            letter-spacing: 0.3px;
+        }
+
+        /* ---- TRANSPORT BUTTONS ---- */
+        .transport {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .play-btn {
+            background: linear-gradient(135deg, #5b7cfa, #8b5cf6);
+            border: 1px solid rgba(139,92,246,0.3);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 2px 16px rgba(108,140,255,0.2);
+        }
+
+        .play-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #6c8cff, #9b6ff7);
+            box-shadow: 0 4px 24px rgba(108,140,255,0.35);
+            border-color: rgba(139,92,246,0.5);
+        }
+
+        .reveal-btn {
+            background: transparent;
+            border: 1px dashed rgba(255,255,255,0.12);
+            color: var(--text-dim);
+        }
+
+        .reveal-btn:hover:not(:disabled) {
+            border-style: solid;
+            color: var(--text);
+        }
+
+        /* ---- PROMPT ---- */
+        .prompt-label {
+            padding: 14px 18px;
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-dim);
+            margin-bottom: 20px;
+            min-height: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .prompt-label::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, var(--accent), #8b5cf6);
+            border-radius: 0 2px 2px 0;
+        }
+
+        /* ---- DIRECTION PANEL ---- */
+        .direction-panel {
+            display: flex;
+            gap: 24px;
+            align-items: stretch;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .voice-group {
+            flex: 1;
+            min-width: 200px;
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: var(--radius);
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .voice-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+        }
+
+        .voice-label.bass { color: var(--accent); }
+        .voice-label.soprano { color: #c084fc; }
+
+        .dir-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .dir-btn {
+            flex: 1;
+            padding: 12px 8px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.03);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .dir-btn:hover {
+            background: rgba(255,255,255,0.07);
+            color: var(--text);
+            border-color: rgba(255,255,255,0.12);
+        }
+
+        .dir-btn.selected {
+            background: linear-gradient(135deg, #5b7cfa, #8b5cf6);
+            border-color: rgba(139,92,246,0.4);
+            color: #fff;
+            box-shadow: 0 2px 12px rgba(108,140,255,0.25);
+        }
+
+        .dir-btn.correct {
+            background: linear-gradient(135deg, #059669, #34d399);
+            border-color: rgba(52,211,153,0.4);
+            color: #fff;
+            box-shadow: 0 2px 12px var(--green-glow);
+            animation: popIn 0.3s ease-out;
+        }
+
+        .dir-btn.wrong {
+            background: linear-gradient(135deg, #dc2626, #f87171);
+            border-color: rgba(248,113,113,0.4);
+            color: #fff;
+            box-shadow: 0 2px 12px var(--red-glow);
+            animation: shake 0.4s ease-out;
+        }
+
+        @keyframes popIn {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%      { transform: translateX(-4px); }
+            40%      { transform: translateX(4px); }
+            60%      { transform: translateX(-3px); }
+            80%      { transform: translateX(2px); }
+        }
+
+        .dir-arrow {
+            font-size: 15px;
+            margin-right: 4px;
+        }
+
+        .check-wrap {
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .check-btn {
+            padding: 12px 28px;
+            font-size: 14px;
+            font-weight: 600;
+            background: linear-gradient(135deg, rgba(108,140,255,0.12), rgba(139,92,246,0.12));
+            border: 1px solid rgba(108,140,255,0.2);
+            color: var(--accent);
+            height: fit-content;
+            align-self: stretch;
+            border-radius: var(--radius);
+        }
+
+        .check-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(108,140,255,0.2), rgba(139,92,246,0.2));
+            border-color: rgba(108,140,255,0.4);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        /* ---- FEEDBACK ---- */
+        .feedback {
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 4px;
+            margin-bottom: 20px;
+        }
+
+        .feedback-text {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            animation: feedbackIn 0.3s ease-out;
+        }
+
+        @keyframes feedbackIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .feedback-text.success { color: var(--green); }
+        .feedback-text.error { color: var(--red); }
+
+        .reveal-text {
+            font-family: var(--mono);
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--accent);
+            padding: 8px 14px;
+            background: rgba(108,140,255,0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(108,140,255,0.15);
+            animation: feedbackIn 0.3s ease-out;
+        }
+
+        /* ---- STATS ---- */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: var(--mono);
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .stat-value.correct { color: var(--green); }
+        .stat-value.wrong { color: var(--red); }
+        .stat-value.transitions { color: var(--accent); }
+
+        .stat-value.grade {
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        /* ---- GRADE RING ---- */
+        .grade-ring {
+            display: inline-block;
+            position: relative;
+            width: 56px;
+            height: 56px;
+            margin: -8px auto 0;
+        }
+
+        .grade-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .grade-ring-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.05);
+            stroke-width: 4;
+        }
+
+        .grade-ring-fill {
+            fill: none;
+            stroke: url(#gradeGrad);
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.6s ease-out;
+        }
+
+        .grade-ring-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--mono);
+            font-size: 13px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ---- STATUS ---- */
+        .status-bar {
+            padding: 10px 16px;
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .status-dot.ready {
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green-glow);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-dot.loading {
+            background: var(--amber);
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.4; }
+        }
+
+        /* ---- HINT ---- */
+        .hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.7;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.015);
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .hint b {
+            display: inline-block;
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-dim);
+            background: rgba(255,255,255,0.06);
+            padding: 1px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.06);
+            vertical-align: 1px;
+        }
+
+        /* ---- RESPONSIVE ---- */
+        @media (max-width: 640px) {
+            body { padding: 12px; }
+            .card { padding: 20px 18px 24px; border-radius: 16px; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+            .direction-panel { gap: 12px; }
+            h1 { font-size: 18px; }
+        }
+    </style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ============================================================
+// AUDIO HELPERS
+// ============================================================
+
+function ensureSecondHigher(midi1, midi2) {
+    return midi2 <= midi1 ? [midi1, midi2 + 12] : [midi1, midi2];
+}
+
+function playMidiPair(midi1, midi2, duration) {
+    if (!TiulPiano.isReady()) return;
+    duration = duration || 3.0;
+    TiulPiano.stopAll();
+    TiulPiano.playChord([midi1, midi2], duration);
+}
+
+function playChordPair(pair) {
+    if (!TiulPiano.isReady() || !pair) return;
+    const [m1, m2] = ensureSecondHigher(pair[0], pair[1]);
+    playMidiPair(m1, m2, 3.0);
+}
+
+function playMelodicUp(m1, m2, dur, gap) {
+    TiulPiano.play(m1, dur);
+    setTimeout(() => TiulPiano.play(m2, dur), gap);
+}
+
+// ============================================================
+// NOTE SPELLING
+// ============================================================
+
+function midiToSpelledName(originalMidi, keyDegrees, transposeOffset) {
+    const pitchClass = originalMidi % 12;
+    const degreeIndex = MIDI_DEGREES.indexOf(pitchClass);
+    if (degreeIndex === -1 || degreeIndex >= keyDegrees.length) {
+        return midiToSoundfontName(originalMidi + transposeOffset);
+    }
+    const noteName = keyDegrees[degreeIndex];
+    const parsed = parseTiulName(noteName);
+    const transposedMidi = originalMidi + transposeOffset;
+    const octave = Math.floor(transposedMidi / 12) - 1;
+    return parsed.displayName + octave;
+}
+
+function chordDisplayName(midiPair, keyDegrees, transposeOffset) {
+    const orig1 = midiPair[0] - transposeOffset;
+    const orig2 = midiPair[1] - transposeOffset;
+    const n1 = midiToSpelledName(orig1, keyDegrees, transposeOffset);
+    const n2 = midiToSpelledName(orig2, keyDegrees, transposeOffset);
+    return n1 + ', ' + n2;
+}
+
+// ============================================================
+// TRANSITION MATRIX
+// ============================================================
+
+function buildDiadTransitionMatrix(midiPairs, transposeOffset) {
+    const transposed = midiPairs.map(p => [p[0] + transposeOffset, p[1] + transposeOffset]);
+    const tupleKeys = transposed.map(p => p[0] + ',' + p[1]);
+    const uniqueKeys = [...new Set(tupleKeys)];
+    const keyToIndex = {};
+    const indexToKey = {};
+    uniqueKeys.forEach((k, i) => { keyToIndex[k] = i; indexToKey[i] = k; });
+    const size = uniqueKeys.length;
+
+    const matrix = [];
+    for (let i = 0; i < size; i++) matrix.push(new Array(size).fill(0));
+    for (let i = 0; i < tupleKeys.length - 1; i++) {
+        matrix[keyToIndex[tupleKeys[i]]][keyToIndex[tupleKeys[i + 1]]]++;
+    }
+    for (let i = 0; i < size; i++) {
+        const rowSum = matrix[i].reduce((a, b) => a + b, 0);
+        if (rowSum > 0) {
+            for (let j = 0; j < size; j++) matrix[i][j] /= rowSum;
+        }
+    }
+    return { matrix, keyToIndex, indexToKey, size };
+}
+
+// ============================================================
+// SESSION HELPERS
+// ============================================================
+
+function createSession(key) {
+    const keyDegrees = KEY_DEGREES[key];
+    const transposeOffset = KEY_OFFSETS[key] || 0;
+    const tm = buildDiadTransitionMatrix(SAMPLE_DOUBLE_5_MIDI, transposeOffset);
+
+    const firstPair = [
+        SAMPLE_DOUBLE_5_MIDI[0][0] + transposeOffset,
+        SAMPLE_DOUBLE_5_MIDI[0][1] + transposeOffset
+    ];
+    const firstKey = firstPair[0] + ',' + firstPair[1];
+
+    return {
+        key,
+        keyDegrees,
+        transposeOffset,
+        tm,
+        previousMidi: null,
+        currentMidi: firstPair,
+        currentIndex: tm.keyToIndex[firstKey],
+        expectedBass: null,
+        expectedSoprano: null,
+        allPlayed: [],
+        correctCount: 0,
+        wrongCount: 0,
+        transCount: 0
+    };
+}
+
+function advanceSession(s) {
+    const weights = s.tm.matrix[s.currentIndex];
+    const indices = Array.from({ length: s.tm.size }, (_, i) => i);
+    const nextIndex = weightedChoice(indices, weights);
+    const pairStr = s.tm.indexToKey[nextIndex];
+    const parts = pairStr.split(',').map(Number);
+
+    const newSession = { ...s };
+    newSession.previousMidi = s.currentMidi;
+    newSession.currentMidi = parts;
+    newSession.currentIndex = nextIndex;
+
+    if (newSession.previousMidi) {
+        newSession.expectedBass = parts[0] > newSession.previousMidi[0] ? 'up' : (parts[0] < newSession.previousMidi[0] ? 'down' : 'same');
+        newSession.expectedSoprano = parts[1] > newSession.previousMidi[1] ? 'up' : (parts[1] < newSession.previousMidi[1] ? 'down' : 'same');
+    }
+
+    newSession.transCount = s.transCount + 1;
+    const display = chordDisplayName(parts, s.keyDegrees, s.transposeOffset);
+    newSession.allPlayed = [...s.allPlayed, display];
+
+    return newSession;
+}
+
+function dirArrow(dir) {
+    if (dir === 'up') return '\u2191';
+    if (dir === 'down') return '\u2193';
+    return '\u2194';
+}
+
+// ============================================================
+// COMPONENTS
+// ============================================================
+
+function DirButton({ voice, dir, label, icon, selection, result, onClick }) {
+    let className = 'dir-btn';
+    if (result && result[voice]) {
+        if (result[voice].selected === dir) {
+            className += result[voice].correct ? ' correct' : ' wrong';
+        }
+    } else if (selection === dir) {
+        className += ' selected';
+    }
+    return (
+        <button className={className} onClick={() => onClick(voice, dir)}>
+            <span className="dir-arrow">{icon}</span>{label}
+        </button>
+    );
+}
+
+function GradeRing({ percent }) {
+    const r = 24;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (percent / 100) * circ;
+    const display = percent >= 0 ? percent.toFixed(0) + '%' : '-';
+
+    return (
+        <div className="grade-ring">
+            <svg width="56" height="56" viewBox="0 0 56 56">
+                <defs>
+                    <linearGradient id="gradeGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="#6c8cff" />
+                        <stop offset="100%" stopColor="#c084fc" />
+                    </linearGradient>
+                </defs>
+                <circle className="grade-ring-bg" cx="28" cy="28" r={r} />
+                <circle className="grade-ring-fill" cx="28" cy="28" r={r}
+                    strokeDasharray={circ}
+                    strokeDashoffset={percent >= 0 ? offset : circ} />
+            </svg>
+            <span className="grade-ring-text">{display}</span>
+        </div>
+    );
+}
+
+const DIR_OPTIONS = [
+    { dir: 'up',   label: 'Up',   icon: '\u2191' },
+    { dir: 'same', label: 'Same', icon: '\u2194' },
+    { dir: 'down', label: 'Down', icon: '\u2193' },
+];
+
+// ============================================================
+// APP
+// ============================================================
+
+function App() {
+    const [selectedKey, setSelectedKey] = useState('C');
+    const [session, setSession] = useState(() => {
+        const s = createSession('C');
+        return advanceSession(s);
+    });
+    const [pianoReady, setPianoReady] = useState(false);
+    const [statusMsg, setStatusMsg] = useState('Loading piano samples...');
+    const [feedback, setFeedback] = useState({ text: '', type: '' });
+    const [revealText, setRevealText] = useState('');
+    const [promptText, setPromptText] = useState('What moved? (Bass / Soprano: up, same, down)');
+    const [bassSelection, setBassSelection] = useState(null);
+    const [sopranoSelection, setSopranoSelection] = useState(null);
+    const [checkResult, setCheckResult] = useState(null);
+    const activeVoiceRef = useRef('bass');
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
+
+    const clearSelections = useCallback(() => {
+        setBassSelection(null);
+        setSopranoSelection(null);
+        setCheckResult(null);
+        activeVoiceRef.current = 'bass';
+    }, []);
+
+    const clearFeedback = useCallback(() => {
+        setFeedback({ text: '', type: '' });
+        setRevealText('');
+    }, []);
+
+    const selectDir = useCallback((voice, dir) => {
+        if (voice === 'bass') {
+            setBassSelection(dir);
+            activeVoiceRef.current = 'soprano';
+        } else {
+            setSopranoSelection(dir);
+        }
+        setCheckResult(null);
+    }, []);
+
+    useEffect(() => {
+        setStatusMsg('Loading piano samples...');
+        TiulPiano.init(
+            () => {
+                setPianoReady(true);
+                setStatusMsg('Ready');
+            },
+            (e) => setStatusMsg('Error loading piano: ' + e.message)
+        );
+    }, []);
+
+    const doPrev = useCallback(() => {
+        const s = sessionRef.current;
+        if (!s.previousMidi) {
+            setFeedback({ text: 'No previous chord yet!', type: 'error' });
+            return;
+        }
+        playChordPair(s.previousMidi);
+    }, []);
+
+    const doPlay = useCallback(() => {
+        const s = sessionRef.current;
+        if (!TiulPiano.isReady()) return;
+        if (s.previousMidi) {
+            playChordPair(s.previousMidi);
+            setTimeout(() => playChordPair(s.currentMidi), 900);
+        } else {
+            playChordPair(s.currentMidi);
+        }
+    }, []);
+
+    const doMelodic = useCallback(() => {
+        const s = sessionRef.current;
+        if (!TiulPiano.isReady()) return;
+        const dur = 1.2, gap = 350;
+        if (!s.previousMidi) {
+            const [m1, m2] = ensureSecondHigher(s.currentMidi[0], s.currentMidi[1]);
+            TiulPiano.stopAll();
+            playMelodicUp(m1, m2, dur, gap);
+            return;
+        }
+        const [p1, p2] = ensureSecondHigher(s.previousMidi[0], s.previousMidi[1]);
+        const [c1, c2] = ensureSecondHigher(s.currentMidi[0], s.currentMidi[1]);
+        TiulPiano.stopAll();
+        playMelodicUp(p1, p2, dur, gap);
+        setTimeout(() => playMelodicUp(c1, c2, dur, gap), gap * 2 + 500);
+    }, []);
+
+    const doMelodicDown = useCallback(() => {
+        const s = sessionRef.current;
+        if (!TiulPiano.isReady()) return;
+        const dur = 1.2, gap = 350;
+        if (!s.previousMidi) {
+            const [m1, m2] = ensureSecondHigher(s.currentMidi[0], s.currentMidi[1]);
+            TiulPiano.stopAll();
+            TiulPiano.play(m2, dur);
+            setTimeout(() => TiulPiano.play(m1, dur), gap);
+            return;
+        }
+        const [p1, p2] = ensureSecondHigher(s.previousMidi[0], s.previousMidi[1]);
+        const [c1, c2] = ensureSecondHigher(s.currentMidi[0], s.currentMidi[1]);
+        TiulPiano.stopAll();
+        TiulPiano.play(p2, dur);
+        setTimeout(() => TiulPiano.play(p1, dur), gap);
+        setTimeout(() => {
+            TiulPiano.play(c2, dur);
+            setTimeout(() => TiulPiano.play(c1, dur), gap);
+        }, gap * 2 + 500);
+    }, []);
+
+    const doNext = useCallback(() => {
+        if (!TiulPiano.isReady()) return;
+        clearFeedback();
+        clearSelections();
+
+        const s = sessionRef.current;
+        playChordPair(s.currentMidi);
+
+        setTimeout(() => {
+            setSession(prev => {
+                const next = advanceSession(prev);
+                playChordPair(next.currentMidi);
+                return next;
+            });
+            setPromptText('What moved? (Bass / Soprano: up, same, down)');
+        }, 1200);
+    }, [clearFeedback, clearSelections]);
+
+    const doReveal = useCallback(() => {
+        const s = sessionRef.current;
+        if (!s.expectedBass) {
+            setFeedback({ text: 'Press Next first to hear a transition!', type: 'error' });
+            return;
+        }
+        const b = s.expectedBass;
+        const sp = s.expectedSoprano;
+        const prevName = chordDisplayName(s.previousMidi, s.keyDegrees, s.transposeOffset);
+        const currName = chordDisplayName(s.currentMidi, s.keyDegrees, s.transposeOffset);
+        setRevealText(
+            'Bass: ' + b[0] + ' ' + dirArrow(b) +
+            '  Sop: ' + sp[0] + ' ' + dirArrow(sp) +
+            '  (' + prevName + ' \u2192 ' + currName + ')'
+        );
+    }, []);
+
+    const doCheck = useCallback(() => {
+        const s = sessionRef.current;
+        if (!s.expectedBass) {
+            setFeedback({ text: 'Press Next first to hear a transition!', type: 'error' });
+            return;
+        }
+        const bSel = bassSelection;
+        const sSel = sopranoSelection;
+        if (!bSel || !sSel) {
+            setFeedback({ text: 'Select both Bass and Soprano directions!', type: 'error' });
+            return;
+        }
+
+        const bassOk = bSel === s.expectedBass;
+        const sopOk = sSel === s.expectedSoprano;
+
+        setCheckResult({
+            bass: { selected: bSel, correct: bassOk },
+            soprano: { selected: sSel, correct: sopOk }
+        });
+
+        if (bassOk && sopOk) {
+            setSession(prev => ({ ...prev, correctCount: prev.correctCount + 1 }));
+            setFeedback({ text: 'Correct!', type: 'success' });
+        } else {
+            setSession(prev => ({ ...prev, wrongCount: prev.wrongCount + 1 }));
+            setFeedback({ text: 'Wrong.', type: 'error' });
+        }
+    }, [bassSelection, sopranoSelection]);
+
+    useEffect(() => {
+        const CMD_SHORTCUTS = { 'P': doPlay, 'N': doNext, 'M': doMelodic, 'L': doMelodicDown, 'R': doReveal, 'A': doPrev, 'C': doCheck };
+        const DIR_MAP = { 'U': 'up', 'D': 'down', 'S': 'same' };
+
+        function handler(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            const key = e.key.toUpperCase();
+
+            const cmdHandler = CMD_SHORTCUTS[key];
+            if (cmdHandler) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                cmdHandler();
+                return;
+            }
+
+            const dir = DIR_MAP[key];
+            if (dir) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                selectDir(activeVoiceRef.current, dir);
+                return;
+            }
+
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                activeVoiceRef.current = activeVoiceRef.current === 'bass' ? 'soprano' : 'bass';
+            }
+        }
+
+        document.addEventListener('keydown', handler, true);
+        return () => document.removeEventListener('keydown', handler, true);
+    }, [doPlay, doNext, doMelodic, doMelodicDown, doReveal, doPrev, doCheck, selectDir]);
+
+    function handleKeyChange(e) {
+        const newKey = e.target.value;
+        setSelectedKey(newKey);
+        const s = createSession(newKey);
+        const advanced = advanceSession(s);
+        setSession(advanced);
+        clearFeedback();
+        clearSelections();
+        setPromptText('What moved? (Bass / Soprano: up, same, down)');
+        setStatusMsg('Key changed to ' + newKey + '. Press Next.');
+    }
+
+    const total = session.correctCount + session.wrongCount;
+    const gradePercent = total > 0 ? (session.correctCount / total) * 100 : -1;
+    const disabled = !pianoReady;
+
+    return (
+        <div className="card">
+            <div className="header">
+                <h1>Directions for 2 &mdash; Key of {session.key}</h1>
+                <div className="key-select-wrap">
+                    Key
+                    <select value={selectedKey} onChange={handleKeyChange}>
+                        {KEY_ORDER.map(k => (
+                            <option key={k} value={k}>{k.replace('-', 'b')}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            <div className="transport">
+                <button disabled={disabled} onClick={doPrev}>Prev <span className="shortcut">A</span></button>
+                <button className="play-btn" disabled={disabled} onClick={doPlay}>Play Pair <span className="shortcut">P</span></button>
+                <button disabled={disabled} onClick={doNext}>Next <span className="shortcut">N</span></button>
+                <button disabled={disabled} onClick={doMelodic}>{'\u2191'} Melodic <span className="shortcut">M</span></button>
+                <button disabled={disabled} onClick={doMelodicDown}>{'\u2193'} Melodic <span className="shortcut">L</span></button>
+                <button className="reveal-btn" onClick={doReveal}>Reveal <span className="shortcut">R</span></button>
+            </div>
+
+            <div className="prompt-label">{promptText}</div>
+
+            <div className="direction-panel">
+                <div className="voice-group">
+                    <span className="voice-label bass">Bass</span>
+                    <div className="dir-buttons">
+                        {DIR_OPTIONS.map(({ dir, label, icon }) => (
+                            <DirButton key={`bass-${dir}`} voice="bass" dir={dir}
+                                label={label} icon={icon}
+                                selection={bassSelection} result={checkResult}
+                                onClick={selectDir} />
+                        ))}
+                    </div>
+                </div>
+                <div className="voice-group">
+                    <span className="voice-label soprano">Soprano</span>
+                    <div className="dir-buttons">
+                        {DIR_OPTIONS.map(({ dir, label, icon }) => (
+                            <DirButton key={`sop-${dir}`} voice="soprano" dir={dir}
+                                label={label} icon={icon}
+                                selection={sopranoSelection} result={checkResult}
+                                onClick={selectDir} />
+                        ))}
+                    </div>
+                </div>
+                <div className="check-wrap">
+                    <button className="check-btn" onClick={doCheck}>Check <span className="shortcut">C</span></button>
+                </div>
+            </div>
+
+            <div className="feedback">
+                {feedback.text && (
+                    <span key={feedback.text} className={`feedback-text ${feedback.type}`}>{feedback.text}</span>
+                )}
+                {revealText && (
+                    <span key={revealText} className="reveal-text">{revealText}</span>
+                )}
+            </div>
+
+            <div className="stats-bar">
+                <div className="stat-card">
+                    <div className="stat-value correct">{session.correctCount}</div>
+                    <div className="stat-label">Correct</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-value wrong">{session.wrongCount}</div>
+                    <div className="stat-label">Wrong</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-value transitions">{session.transCount}</div>
+                    <div className="stat-label">Transitions</div>
+                </div>
+                <div className="stat-card">
+                    <GradeRing percent={gradePercent} />
+                    <div className="stat-label">Grade</div>
+                </div>
+            </div>
+
+            <div className="status-bar">
+                <span className={`status-dot ${pianoReady ? 'ready' : 'loading'}`}></span>
+                {statusMsg}
+            </div>
+
+            <div className="hint">
+                <b>N</b> Next &nbsp; <b>P</b> Play pair &nbsp; <b>M</b> Melodic{'\u2191'} &nbsp; <b>L</b> Melodic{'\u2193'} &nbsp; <b>A</b> Prev &nbsp;
+                <b>R</b> Reveal &nbsp; <b>C</b> Check &nbsp;&nbsp;|&nbsp;&nbsp;
+                <b>U</b> Up &nbsp; <b>S</b> Same &nbsp; <b>D</b> Down &nbsp; <b>Tab</b> Switch voice
+            </div>
+        </div>
+    );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

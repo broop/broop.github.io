@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Modal Key Signature Trainer</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      body { margin: 24px; background: #f6f7f9; color: #111; }
+      .card {
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 14px;
+        padding: 16px 16px 18px;
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+      }
+      h1 { margin: 0 0 12px; font-size: 18px; }
+      .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+      .row + .row { margin-top: 10px; }
+      label { display: grid; gap: 6px; font-size: 14px; }
+      select, input {
+        font-size: 14px;
+        padding: 8px 10px;
+        border: 1px solid #cfd6e4;
+        border-radius: 10px;
+      }
+      select:focus-visible, input:focus-visible, button:focus-visible {
+        outline: 2px solid #4a7aed;
+        outline-offset: 1px;
+      }
+      input[type="number"] { width: 90px; }
+      button {
+        font-size: 14px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cfd6e4;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:hover { background: #f0f3f8; }
+      button:disabled { opacity: 0.6; cursor: default; }
+      button:disabled:hover { background: #fff; }
+      button.mode-btn { min-width: 110px; font-weight: 500; }
+      button.mode-btn.correct { background: #d4edda; border-color: #5cb85c; }
+      button.mode-btn.wrong { background: #f8d7da; border-color: #d9534f; }
+      #score {
+        margin-top: 12px;
+        border: 1px solid #e5e9f2;
+        border-radius: 12px;
+        padding: 10px;
+        min-height: 170px;
+      }
+      .prompt { margin-top: 10px; font-size: 14px; color: #444; }
+      .hint { margin-top: 6px; font-size: 12px; color: #555; }
+      .feedback { margin-top: 10px; min-height: 22px; font-size: 14px; }
+      .feedback.correct { color: #2a7a3a; }
+      .feedback.wrong { color: #b3322c; }
+      .stats { margin-top: 10px; display: flex; gap: 18px; font-size: 13px; color: #333; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .pill {
+        font-size: 12px;
+        padding: 3px 8px;
+        border: 1px solid #cfd6e4;
+        border-radius: 999px;
+        background: #fff;
+        color: #333;
+      }
+      .modes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .mode-chart { margin-top: 12px; font-size: 13px; }
+      .mode-chart:empty { margin-top: 0; }
+      .mode-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      .mode-row.highlight { background: #fff7d6; }
+      .mode-row-label {
+        width: 110px;
+        flex-shrink: 0;
+        font-size: 13px;
+        color: #333;
+      }
+      .mode-row-staff { flex: 1; min-width: 0; }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <h1>Modal Key Signature Trainer</h1>
+
+      <div class="row">
+        <button id="newBtn" type="button">New</button>
+
+        <label>
+          Max accidentals
+          <select id="maxAccSelect">
+            <option value="2">up to 2</option>
+            <option value="4">up to 4</option>
+            <option value="5" selected>up to 5</option>
+            <option value="7">up to 7</option>
+          </select>
+        </label>
+
+        <span class="pill">Identify the mode from key signature + tonic</span>
+      </div>
+
+      <div id="promptLabel" class="prompt"></div>
+
+      <div id="score"></div>
+
+      <div class="modes" id="modeButtons"></div>
+
+      <div id="feedback" class="feedback"></div>
+
+      <div id="modeChart" class="mode-chart"></div>
+
+      <div class="stats">
+        <span>Correct: <span id="ok">0</span></span>
+        <span>Wrong: <span id="bad">0</span></span>
+      </div>
+
+      <div class="hint">
+        Each key signature can spell seven different modes &mdash; one for each
+        diatonic tonic. Brightest to darkest:
+        <span class="mono">Lydian (+1)</span>,
+        <span class="mono">Ionian (0)</span>,
+        <span class="mono">Mixolydian (&minus;1)</span>,
+        <span class="mono">Dorian (&minus;2)</span>,
+        <span class="mono">Aeolian (&minus;3)</span>,
+        <span class="mono">Phrygian (&minus;4)</span>,
+        <span class="mono">Locrian (&minus;5)</span>.
+        The number is how many sharps the mode adds to (or removes from) the
+        major key signature with the same tonic. Press <span class="mono">Enter</span>
+        or <span class="mono">Space</span> after answering to continue.
+      </div>
+    </div>
+
+    <!-- VexFlow 4.x prebundled build that exposes global Vex.Flow -->
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/releases/vexflow-min.js"></script>
+
+    <script>
+      (function () {
+        // DOM
+        const newBtn = document.getElementById("newBtn");
+        const maxAccSelect = document.getElementById("maxAccSelect");
+        const scoreDiv = document.getElementById("score");
+        const feedbackDiv = document.getElementById("feedback");
+        const promptLabel = document.getElementById("promptLabel");
+        const okSpan = document.getElementById("ok");
+        const badSpan = document.getElementById("bad");
+        const modeButtonsDiv = document.getElementById("modeButtons");
+        const modeChartDiv = document.getElementById("modeChart");
+
+        function setFeedback(msg, kind) {
+          feedbackDiv.textContent = msg;
+          feedbackDiv.classList.remove("correct", "wrong");
+          if (kind) feedbackDiv.classList.add(kind);
+        }
+
+        if (typeof Vex === "undefined" || !Vex.Flow) {
+          setFeedback("VexFlow did not load. Check your internet connection or the CDN URL.");
+          return;
+        }
+        const VF = Vex.Flow;
+
+        const renderer = new VF.Renderer(scoreDiv, VF.Renderer.Backends.SVG);
+        renderer.resize(540, 170);
+
+        // Modes ordered brightest -> darkest.
+        // MODE_OFFSET = (key signature position) - (tonic position on circle of fifths).
+        const MODES = ["Lydian", "Ionian", "Mixolydian", "Dorian", "Aeolian", "Phrygian", "Locrian"];
+        const MODE_OFFSET = {
+          Lydian: 1,
+          Ionian: 0,
+          Mixolydian: -1,
+          Dorian: -2,
+          Aeolian: -3,
+          Phrygian: -4,
+          Locrian: -5,
+        };
+
+        // Circle-of-fifths position -> note spelling
+        const POS_TO_VEXKEY = {
+          "-7": "Cb", "-6": "Gb", "-5": "Db", "-4": "Ab", "-3": "Eb", "-2": "Bb", "-1": "F",
+          "0": "C",
+          "1": "G", "2": "D", "3": "A", "4": "E", "5": "B", "6": "F#", "7": "C#",
+        };
+
+        const POS_TO_LABEL = {
+          "-7": "C♭", "-6": "G♭", "-5": "D♭", "-4": "A♭", "-3": "E♭",
+          "-2": "B♭", "-1": "F", "0": "C", "1": "G", "2": "D", "3": "A", "4": "E",
+          "5": "B", "6": "F♯", "7": "C♯",
+        };
+
+        const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"];
+        const FLAT_ORDER  = ["B", "E", "A", "D", "G", "C", "F"];
+
+        function getKeyMods(pos) {
+          const mods = {};
+          if (pos > 0) {
+            for (let i = 0; i < Math.min(pos, 7); i++) mods[SHARP_ORDER[i]] = "#";
+          } else if (pos < 0) {
+            for (let i = 0; i < Math.min(-pos, 7); i++) mods[FLAT_ORDER[i]] = "b";
+          }
+          return mods;
+        }
+
+        const POS_TO_NOTE = {
+          "-7": { letter: "C", acc: "b" },
+          "-6": { letter: "G", acc: "b" },
+          "-5": { letter: "D", acc: "b" },
+          "-4": { letter: "A", acc: "b" },
+          "-3": { letter: "E", acc: "b" },
+          "-2": { letter: "B", acc: "b" },
+          "-1": { letter: "F", acc: "" },
+          "0":  { letter: "C", acc: "" },
+          "1":  { letter: "G", acc: "" },
+          "2":  { letter: "D", acc: "" },
+          "3":  { letter: "A", acc: "" },
+          "4":  { letter: "E", acc: "" },
+          "5":  { letter: "B", acc: "" },
+          "6":  { letter: "F", acc: "#" },
+          "7":  { letter: "C", acc: "#" },
+        };
+
+        // Octave (treble clef) chosen so the tonic sits comfortably on the staff.
+        // C4 is below the staff; C5 is on the third space.
+        const TONIC_OCTAVE = {
+          C: 5, D: 5, E: 4, F: 4, G: 4, A: 4, B: 4,
+        };
+
+        // State
+        let currentTonicPos = 0;
+        let currentMode = "Ionian";
+        let currentKeySigPos = 0;
+        let answered = false;
+        let ok = 0;
+        let bad = 0;
+        let autoAdvanceTimer = null;
+
+        function randInt(min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+        function choice(arr) {
+          return arr[randInt(0, arr.length - 1)];
+        }
+        function updateStats() {
+          okSpan.textContent = String(ok);
+          badSpan.textContent = String(bad);
+        }
+
+        function pickRound() {
+          const maxAcc = parseInt(maxAccSelect.value, 10) || 5;
+          const lo = -maxAcc;
+          const hi = maxAcc;
+          for (let attempts = 0; attempts < 500; attempts++) {
+            const mode = choice(MODES);
+            const keySigPos = randInt(lo, hi);
+            const tonicPos = keySigPos - MODE_OFFSET[mode];
+            if (tonicPos >= -7 && tonicPos <= 7) {
+              return { mode, keySigPos, tonicPos };
+            }
+          }
+          return { mode: "Ionian", keySigPos: 0, tonicPos: 0 };
+        }
+
+        function renderRound(keySigPos, tonicPos) {
+          try {
+            const context = renderer.getContext();
+            context.clear();
+            context.setFont("Arial", 10, "");
+
+            const stave = new VF.Stave(10, 30, 500);
+            stave.addClef("treble");
+            const keyVexKey = POS_TO_VEXKEY[String(keySigPos)];
+            if (keyVexKey !== "C") stave.addKeySignature(keyVexKey);
+            stave.setContext(context).draw();
+
+            const tonic = POS_TO_NOTE[String(tonicPos)];
+            const octave = TONIC_OCTAVE[tonic.letter] || 4;
+            const vexKey = tonic.letter.toLowerCase() + tonic.acc + "/" + octave;
+
+            const note = new VF.StaveNote({
+              clef: "treble",
+              keys: [vexKey],
+              duration: "w",
+            });
+            // No explicit accidental: any accidental on the tonic is part of
+            // the key signature (the tonic is always diatonic to its own mode).
+
+            const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+            voice.setMode(VF.Voice.Mode.SOFT);
+            voice.addTickables([note]);
+
+            new VF.Formatter().joinVoices([voice]).format([voice], 350);
+            voice.draw(context, stave);
+          } catch (e) {
+            setFeedback("Render error: " + (e && e.message ? e.message : String(e)));
+          }
+        }
+
+        function describeKeySig(pos) {
+          if (pos === 0) return "no sharps or flats";
+          if (pos > 0) return pos + (pos === 1 ? " sharp" : " sharps");
+          const n = -pos;
+          return n + (n === 1 ? " flat" : " flats");
+        }
+
+        function updatePromptLabel(tonicPos, keySigPos) {
+          const tonicLabel = POS_TO_LABEL[String(tonicPos)];
+          promptLabel.textContent =
+            `Key signature: ${describeKeySig(keySigPos)}. Tonic: ${tonicLabel}. Which mode is it?`;
+        }
+
+        function buildModeButtons() {
+          modeButtonsDiv.innerHTML = "";
+          for (const m of MODES) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "mode-btn";
+            btn.textContent = m;
+            btn.dataset.mode = m;
+            btn.addEventListener("click", () => onModeClick(m, btn));
+            modeButtonsDiv.appendChild(btn);
+          }
+        }
+
+        function clearButtonStyles() {
+          for (const btn of modeButtonsDiv.querySelectorAll(".mode-btn")) {
+            btn.classList.remove("correct", "wrong");
+            btn.disabled = false;
+          }
+        }
+
+        function clearModeChart() {
+          modeChartDiv.innerHTML = "";
+        }
+
+        function renderScaleStaff(host, ksPos, tonicLetter) {
+          const r = new VF.Renderer(host, VF.Renderer.Backends.SVG);
+          r.resize(640, 90);
+          const ctx = r.getContext();
+          ctx.setFont("Arial", 10, "");
+
+          const stave = new VF.Stave(0, 0, 620);
+          stave.addClef("treble");
+          const keyVexKey = POS_TO_VEXKEY[String(ksPos)];
+          if (keyVexKey !== "C") stave.addKeySignature(keyVexKey);
+          stave.setContext(ctx).draw();
+
+          const LETTERS = "CDEFGAB";
+          const tonicIdx = LETTERS.indexOf(tonicLetter);
+          const mods = getKeyMods(ksPos);
+
+          // Start scale low so 8 ascending notes stay near the staff.
+          const startOct = (tonicLetter === "A" || tonicLetter === "B") ? 3 : 4;
+
+          const notes = [];
+          for (let i = 0; i < 8; i++) {
+            const idx = (tonicIdx + i) % 7;
+            const letter = LETTERS[idx];
+            const octave = startOct + Math.floor((tonicIdx + i) / 7);
+            const acc = mods[letter] || "";
+            const vexKey = letter.toLowerCase() + acc + "/" + octave;
+            const note = new VF.StaveNote({ clef: "treble", keys: [vexKey], duration: "q" });
+            notes.push(note);
+          }
+
+          const voice = new VF.Voice({ num_beats: notes.length, beat_value: 4 });
+          voice.setMode(VF.Voice.Mode.SOFT);
+          voice.addTickables(notes);
+          new VF.Formatter().joinVoices([voice]).format([voice], 540);
+          voice.draw(ctx, stave);
+        }
+
+        function renderModeChart(tonicPos, highlightMode) {
+          modeChartDiv.innerHTML = "";
+          const tonicLabel = POS_TO_LABEL[String(tonicPos)];
+          const tonic = POS_TO_NOTE[String(tonicPos)];
+
+          for (const m of MODES) {
+            const ksPos = tonicPos + MODE_OFFSET[m];
+            if (ksPos < -7 || ksPos > 7) continue;
+
+            const row = document.createElement("div");
+            row.className = "mode-row" + (m === highlightMode ? " highlight" : "");
+
+            const label = document.createElement("div");
+            label.className = "mode-row-label";
+            label.textContent = `${tonicLabel} ${m}`;
+            row.appendChild(label);
+
+            const staffHost = document.createElement("div");
+            staffHost.className = "mode-row-staff";
+            row.appendChild(staffHost);
+
+            modeChartDiv.appendChild(row);
+            renderScaleStaff(staffHost, ksPos, tonic.letter);
+          }
+        }
+
+        function disableModeButtons() {
+          for (const btn of modeButtonsDiv.querySelectorAll(".mode-btn")) {
+            btn.disabled = true;
+          }
+        }
+
+        function onModeClick(mode, btn) {
+          if (answered) return;
+          answered = true;
+          disableModeButtons();
+
+          const tonicLabel = POS_TO_LABEL[String(currentTonicPos)];
+          renderModeChart(currentTonicPos, currentMode);
+
+          if (mode === currentMode) {
+            ok++;
+            btn.classList.add("correct");
+            setFeedback(`Correct! ${tonicLabel} ${currentMode}. Press Enter or Space for next.`, "correct");
+            updateStats();
+          } else {
+            bad++;
+            btn.classList.add("wrong");
+            for (const b of modeButtonsDiv.querySelectorAll(".mode-btn")) {
+              if (b.dataset.mode === currentMode) b.classList.add("correct");
+            }
+            setFeedback(`Wrong. The answer was ${tonicLabel} ${currentMode}.`, "wrong");
+            updateStats();
+          }
+        }
+
+        function cancelAutoAdvance() {
+          if (autoAdvanceTimer !== null) {
+            clearTimeout(autoAdvanceTimer);
+            autoAdvanceTimer = null;
+          }
+        }
+
+        function newRound() {
+          cancelAutoAdvance();
+          const r = pickRound();
+          currentMode = r.mode;
+          currentKeySigPos = r.keySigPos;
+          currentTonicPos = r.tonicPos;
+          answered = false;
+          clearButtonStyles();
+          clearModeChart();
+          renderRound(r.keySigPos, r.tonicPos);
+          updatePromptLabel(r.tonicPos, r.keySigPos);
+          setFeedback("");
+        }
+
+        // Wire up
+        newBtn.addEventListener("click", newRound);
+        maxAccSelect.addEventListener("change", newRound);
+
+        document.addEventListener("keydown", (e) => {
+          if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
+          if (e.key === "Enter" || e.key === " ") {
+            if (answered) {
+              newRound();
+              e.preventDefault();
+            }
+          }
+        });
+
+        buildModeButtons();
+        updateStats();
+        newRound();
+      })();
+    </script>
+  </body>
+</html>

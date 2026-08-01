@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Hindy - Dictation Training</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .phrase-nav {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .phrase-label {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            color: #555;
+            min-width: 110px;
+            text-align: center;
+        }
+
+        .answer {
+            margin-top: 10px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #2563eb;
+            min-height: 24px;
+        }
+
+        .answer:empty { display: none; }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Hindy &mdash; Dictation Training</h1>
+
+    <div class="row">
+        <label>
+            Lesson
+            <select id="lessonSelect"></select>
+        </label>
+        <label>
+            Tempo
+            <select id="bpmSelect">
+                <option value="40">40 bpm</option>
+                <option value="50">50 bpm</option>
+                <option value="60" selected>60 bpm</option>
+                <option value="72">72 bpm</option>
+                <option value="88">88 bpm</option>
+                <option value="104">104 bpm</option>
+            </select>
+        </label>
+        <div class="phrase-nav" style="align-self:end">
+            <button id="prevBtn">&#8592; Prev <span class="shortcut">(B)</span></button>
+            <span id="phraseLabel" class="phrase-label">&mdash;</span>
+            <button id="nextBtn">Next &#8594; <span class="shortcut">(N)</span></button>
+        </div>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="againBtn">Again <span class="shortcut">(A)</span></button>
+        <button id="firstBtn">First note <span class="shortcut">(F)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+    </div>
+
+    <div id="answer" class="answer"></div>
+
+    <div class="stats">
+        <span>Phrases played: <span id="playedCount">0</span></span>
+        <span>Lesson: <span id="lessonStat">&mdash;</span></span>
+        <span>Elapsed: <span id="elapsed">0:00</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>A</b>=Again, <b>F</b>=First note, <b>N</b>=Next phrase, <b>B</b>=Previous
+        phrase, <b>R</b>=Reveal.<br/>
+        Dictation flow: play the phrase as many times as you need, write it down, then reveal and compare.
+        Phrases keep their notated rhythm at the chosen tempo. There is no typed answer check on this page
+        &mdash; the exercise is written dictation, as in the book.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-ui.js"></script>
+<script src="hindy-data.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/dictation_player.py and src/SimplePlayer2.py:
+        // "play music xml files for dictation purposes", phrase by phrase,
+        // with the answer displayed on demand.
+        //
+        // The phrase splitting and note extraction is done offline by
+        // src/export_hindy.py in the ear-trainer repo, which reads the
+        // local MusicXML transcriptions and writes hindy-data.js. Files 5
+        // and 7 split at double barlines (dictation_player), file 8 at
+        // rest-filled measures (phrase_splitter), and tie continuations
+        // are merged so held notes do not re-attack.
+        //
+        // Timing: events carry offsets and durations in quarterLengths;
+        // playback schedules them at the chosen bpm, so the notated rhythm
+        // survives - unlike the fixed-step melody playback on the other
+        // pages. There is deliberately no typed answer check: the exercise
+        // is written dictation, and the Python plays then shows.
+        // ============================================================
+
+        const LESSONS = Object.keys(HINDY);
+
+        // ---- DOM ----
+
+        const el = {
+            lessonSelect: ETUI.$('lessonSelect'),
+            bpmSelect: ETUI.$('bpmSelect'),
+            prevBtn: ETUI.$('prevBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            phraseLabel: ETUI.$('phraseLabel'),
+            playBtn: ETUI.$('playBtn'),
+            againBtn: ETUI.$('againBtn'),
+            firstBtn: ETUI.$('firstBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            answer: ETUI.$('answer'),
+            playedCount: ETUI.$('playedCount'),
+            lessonStat: ETUI.$('lessonStat'),
+            elapsed: ETUI.$('elapsed'),
+            status: ETUI.$('status')
+        };
+
+        LESSONS.forEach(function (name) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = 'Lesson ' + name + ' (' + HINDY[name].phrases.length + ' phrases)';
+            el.lessonSelect.appendChild(opt);
+        });
+
+        const session = {
+            lesson: LESSONS[0],
+            phraseIdx: 0,
+            played: 0,
+            startTime: Date.now()
+        };
+
+        function phrases() { return HINDY[session.lesson].phrases; }
+        function currentPhrase() { return phrases()[session.phraseIdx]; }
+        function bpm() { return parseInt(el.bpmSelect.value, 10); }
+
+        // ---- playback with real rhythm ----
+
+        let timers = [];
+
+        function stopAllPlayback() {
+            timers.forEach(clearTimeout);
+            timers = [];
+            TiulPiano.stopAll();
+        }
+
+        function playPhrase() {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            stopAllPlayback();
+            const beatSec = 60 / bpm();
+            currentPhrase().events.forEach(function (e) {
+                timers.push(setTimeout(function () {
+                    e.midis.forEach(function (m) {
+                        TiulPiano.play(m, Math.max(0.3, e.d * beatSec));
+                    });
+                }, e.t * beatSec * 1000));
+            });
+        }
+
+        function playFirstNote() {
+            if (!TiulPiano.isReady()) return;
+            stopAllPlayback();
+            const e = currentPhrase().events[0];
+            e.midis.forEach(m => TiulPiano.play(m, 1.5));
+            ETUI.setText(el.status, 'First note played.');
+        }
+
+        // ---- UI ----
+
+        function displayName(n) { return n.replace(/-/g, 'b'); }
+
+        function renderNav() {
+            el.phraseLabel.textContent =
+                'phrase ' + (session.phraseIdx + 1) + ' / ' + phrases().length;
+            el.lessonStat.textContent = session.lesson;
+            el.prevBtn.disabled = session.phraseIdx === 0;
+            el.nextBtn.disabled = session.phraseIdx >= phrases().length - 1;
+            el.playedCount.textContent = session.played;
+        }
+
+        function renderElapsed() {
+            const secs = Math.floor((Date.now() - session.startTime) / 1000);
+            el.elapsed.textContent =
+                Math.floor(secs / 60) + ':' + ('' + (secs % 60)).padStart(2, '0');
+        }
+
+        function clearAnswer() {
+            el.answer.textContent = '';
+        }
+
+        function doPlay() {
+            playPhrase();
+            session.played++;
+            renderNav();
+        }
+
+        function doAgain() {
+            playPhrase();
+        }
+
+        // Duration in beats -> conventional note-value name.
+        const DUR_NAMES = {
+            '4': '𝅝', '3': '𝅗𝅥.', '2': '𝅗𝅥', '1.5': '♩.', '1': '♩',
+            '0.75': '♪.', '0.5': '♪', '0.25': '♬'
+        };
+
+        function durName(d) {
+            const key = String(Math.round(d * 100) / 100);
+            return DUR_NAMES[key] || (d + 'b');
+        }
+
+        // These lessons are rhythm dictation on one or a few pitches, so
+        // the useful answer is the rhythm: note values with rests where the
+        // events leave gaps. Pitch is only shown when the phrase has more
+        // than one.
+        function doReveal() {
+            const events = currentPhrase().events;
+            const pitchSet = new Set();
+            events.forEach(e => e.names.forEach(n => pitchSet.add(n)));
+            const showPitch = pitchSet.size > 1;
+
+            const parts = [];
+            events.forEach(function (e, i) {
+                let token = durName(e.d);
+                if (showPitch) {
+                    token = e.names.map(displayName).join('+') + ' ' + token;
+                }
+                parts.push(token);
+
+                const next = events[i + 1];
+                if (next) {
+                    const gap = Math.round((next.t - (e.t + e.d)) * 100) / 100;
+                    if (gap > 0) parts.push('(rest ' + durName(gap) + ')');
+                }
+            });
+            el.answer.textContent = parts.join('   ');
+        }
+
+        function move(delta) {
+            const target = session.phraseIdx + delta;
+            if (target < 0 || target >= phrases().length) return;
+            stopAllPlayback();
+            session.phraseIdx = target;
+            clearAnswer();
+            renderNav();
+            doPlay();
+        }
+
+        function switchLesson() {
+            stopAllPlayback();
+            session.lesson = el.lessonSelect.value;
+            session.phraseIdx = 0;
+            clearAnswer();
+            renderNav();
+            ETUI.setText(el.status, 'Lesson ' + session.lesson + '. Press Play.');
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.againBtn.addEventListener('click', doAgain);
+        el.firstBtn.addEventListener('click', playFirstNote);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.nextBtn.addEventListener('click', function () { move(1); });
+        el.prevBtn.addEventListener('click', function () { move(-1); });
+        el.lessonSelect.addEventListener('change', switchLesson);
+        el.bpmSelect.addEventListener('change', function () {
+            ETUI.setText(el.status, bpm() + ' bpm.');
+        });
+
+        ETUI.shortcuts({
+            P: doPlay,
+            A: doAgain,
+            F: playFirstNote,
+            R: doReveal,
+            N: function () { move(1); },
+            B: function () { move(-1); }
+        });
+
+        renderNav();
+        setInterval(renderElapsed, 1000);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [45, 96],
+            readyMessage: 'Ready! ' + LESSONS.map(n => 'Lesson ' + n + ': '
+                + HINDY[n].phrases.length + ' phrases').join(', ') + '.'
+        });
+    })();
+</script>
+</body>
+</html>

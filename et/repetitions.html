@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Repetitions - Ear Training</title>
+    <link rel="stylesheet" href="et-style.css"/>
+</head>
+
+<body>
+<div class="card">
+    <h1>Repetitions &mdash; Ear Training</h1>
+
+    <div class="row">
+        <label>
+            Key
+            <select id="keySelect"></select>
+        </label>
+        <label>
+            Notes per group
+            <select id="groupSelect">
+                <option value="1" selected>1 note</option>
+                <option value="2">2 notes</option>
+                <option value="3">3 notes</option>
+            </select>
+        </label>
+        <label>
+            Registers
+            <select id="registerSelect">
+                <option value="0">1 (fixed octave)</option>
+                <option value="1" selected>±1 octave</option>
+                <option value="2">±2 octaves</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="row">
+        <label style="flex:1">
+            Pool <span id="poolSize" class="shortcut"></span>
+            <div id="poolDisplay" class="status" style="margin-top:0"></div>
+        </label>
+    </div>
+
+    <div class="row">
+        <button id="addBtn">Add note <span class="shortcut">(+)</span></button>
+        <button id="removeBtn">Remove <span class="shortcut">(&minus;)</span></button>
+        <button id="resetBtn">Reset pool</button>
+    </div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="againBtn">Again <span class="shortcut">(A)</span></button>
+        <button id="nextBtn">Next <span class="shortcut">(N)</span></button>
+        <button id="revealBtn">Reveal <span class="shortcut">(R)</span></button>
+        <span id="revealDisplay" class="reveal-display"></span>
+    </div>
+
+    <div class="row">
+        <label>
+            Your guess
+            <input type="text" id="guessInput" class="guess-input" placeholder="e.g. D" autocomplete="off"/>
+        </label>
+        <button id="checkBtn">Check <span class="shortcut">(Enter)</span></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <div class="stats">
+        <span>Correct: <span id="correctCount">0</span></span>
+        <span>Wrong: <span id="wrongCount">0</span></span>
+        <span>Count: <span id="playedCount">0</span></span>
+        <span>Elapsed: <span id="elapsed">0:00</span></span>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>A</b>=Again, <b>N</b>=Next, <b>R</b>=Reveal,
+        <b>+</b>=Add note, <b>&minus;</b>=Remove.<br/>
+        Start with three degrees and stay there until they are automatic, then <b>Add note</b> to widen the pool
+        one degree at a time. Degrees arrive in tiul weight order &mdash; 1, 5, 3, 2, 4, 6, 7, then the
+        chromatics &mdash; and the earlier ones keep coming round more often.<br/>
+        With groups of 2 or 3, name the notes <b>in the order played</b>, separated by spaces.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="tiul-constants.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-theory.js"></script>
+<script src="et-drill.js"></script>
+<script src="et-ui.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Ported from src/repetitions.py.
+        //
+        // The Repetitions class body is `...` - a docstring and nothing
+        // else. The working code is in its __main__, which is a Tiul drill
+        // with a growing pool: it starts from t.tiul[:3], weights those with
+        // t.tiul_weights, draws with random.choices, plays at a random
+        // octave via rnd_octave(4, 1), and offers an Add button that appends
+        // the next degree. It also tracks a count and an elapsed timer, run
+        // on a background thread.
+        //
+        // KEY_DEGREES and TIUL_WEIGHTS_DEFAULT in tiul-constants.js are the
+        // same t.tiul and t.tiul_weights, so the pool logic carries over
+        // directly.
+        //
+        // Two things from the file are finished rather than copied. Its
+        // 1/2/3-note radio is wired to an event handler that only prints, so
+        // the control does nothing - here it groups that many notes, which
+        // is what the class docstring asks for ("Plays n length notes").
+        // And its "TODO start on not the tonic!" is honoured: the opening
+        // note is drawn from the pool like any other.
+        //
+        // The docstring's pattern types (scalar, chromatic, modal, cluster,
+        // quartal, quintal) are not built - those exist as their own pages
+        // in clusters.html and quartal.html.
+        // ============================================================
+
+        const CONFIG = {
+            BASE_OCTAVE: 4,
+            START_POOL: 3,          // t.tiul[:3]
+            NOTE_DURATION: 1.2,
+            GROUP_STEP_MS: 620
+        };
+
+        // ---- DOM ----
+
+        const el = {
+            keySelect: ETUI.$('keySelect'),
+            groupSelect: ETUI.$('groupSelect'),
+            registerSelect: ETUI.$('registerSelect'),
+            poolDisplay: ETUI.$('poolDisplay'),
+            poolSize: ETUI.$('poolSize'),
+            addBtn: ETUI.$('addBtn'),
+            removeBtn: ETUI.$('removeBtn'),
+            resetBtn: ETUI.$('resetBtn'),
+            playBtn: ETUI.$('playBtn'),
+            againBtn: ETUI.$('againBtn'),
+            nextBtn: ETUI.$('nextBtn'),
+            revealBtn: ETUI.$('revealBtn'),
+            checkBtn: ETUI.$('checkBtn'),
+            guessInput: ETUI.$('guessInput'),
+            revealDisplay: ETUI.$('revealDisplay'),
+            feedback: ETUI.$('feedback'),
+            status: ETUI.$('status'),
+            elapsed: ETUI.$('elapsed')
+        };
+
+        KEY_ORDER.forEach(function (k) {
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = k.replace('-', 'b');
+            el.keySelect.appendChild(opt);
+        });
+        el.keySelect.value = 'D';
+
+        const updateStats = ETUI.bindStats({
+            correct: 'correctCount',
+            wrong: 'wrongCount',
+            played: 'playedCount'
+        });
+
+        const session = { poolSize: CONFIG.START_POOL, startTime: Date.now() };
+
+        function degrees() { return KEY_DEGREES[el.keySelect.value]; }
+        function pool() { return degrees().slice(0, session.poolSize); }
+        function weights() { return TIUL_WEIGHTS_DEFAULT.slice(0, session.poolSize); }
+
+        function renderPool() {
+            const names = pool().map(n => parseTiulName(n).displayName);
+            const w = weights();
+            el.poolDisplay.textContent = names
+                .map((n, i) => n + ' (' + w[i] + ')')
+                .join('   ');
+            el.poolSize.textContent = '— ' + session.poolSize + ' of ' + degrees().length;
+            el.addBtn.disabled = session.poolSize >= degrees().length;
+            el.removeBtn.disabled = session.poolSize <= CONFIG.START_POOL;
+        }
+
+        function renderElapsed() {
+            const secs = Math.floor((Date.now() - session.startTime) / 1000);
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
+            el.elapsed.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        // ---- generation ----
+
+        // rnd_octave(4, range)
+        function randomOctave() {
+            const v = parseInt(el.registerSelect.value, 10);
+            if (v === 0) return CONFIG.BASE_OCTAVE;
+            return Math.max(2, Math.min(6, CONFIG.BASE_OCTAVE + ET.randInt(2 * v + 1) - v));
+        }
+
+        function generate() {
+            const size = parseInt(el.groupSelect.value, 10);
+            const p = pool();
+            const w = weights();
+
+            const notes = [];
+            for (let i = 0; i < size; i++) {
+                const pitch = weightedChoice(p, w);
+                const octave = randomOctave();
+                notes.push({
+                    pitch: pitch,
+                    octave: octave,
+                    midi: tiulNameToMidi(pitch, octave),
+                    display: parseTiulName(pitch).displayName + octave,
+                    name: parseTiulName(pitch).displayName
+                });
+            }
+            return { notes: notes, poolSize: session.poolSize };
+        }
+
+        function play(item) {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            const midis = item.notes.map(n => n.midi);
+            if (midis.length === 1) {
+                ETUI.stopMelody();
+                TiulPiano.stopAll();
+                TiulPiano.play(midis[0], CONFIG.NOTE_DURATION);
+            } else {
+                ETUI.playMelody(midis, {
+                    stepMs: CONFIG.GROUP_STEP_MS,
+                    duration: CONFIG.NOTE_DURATION
+                });
+            }
+        }
+
+        function describe(item) {
+            return item.notes.map(n => n.display).join(' ')
+                + '  |  pool of ' + item.poolSize;
+        }
+
+        function check(raw, item) {
+            const guessed = ET.parsePitchClasses(raw);
+            if (guessed === null) {
+                return { invalid: true, message: 'Could not read that.' };
+            }
+            if (guessed.length !== item.notes.length) {
+                return {
+                    invalid: true,
+                    message: 'That is ' + guessed.length + ', but ' + item.notes.length
+                        + ' note' + (item.notes.length === 1 ? '' : 's') + ' played.'
+                };
+            }
+
+            const actual = item.notes.map(n => ET.pitchClass(n.midi));
+            let hits = 0;
+            for (let i = 0; i < guessed.length; i++) {
+                if (guessed[i] === actual[i]) hits++;
+            }
+
+            if (hits === actual.length) {
+                return { correct: true, message: 'Correct — ' + describe(item) };
+            }
+            return {
+                correct: false,
+                message: (actual.length > 1 ? hits + ' of ' + actual.length + ' in place. ' : '')
+                    + 'It was ' + describe(item)
+            };
+        }
+
+        // ---- drill ----
+
+        const drill = ETDrill.create({
+            generate: generate,
+            play: play,
+            describe: describe,
+            check: check
+        });
+
+        function refresh() {
+            updateStats(drill.state);
+            renderElapsed();
+        }
+
+        function doPlay() { drill.play(); refresh(); }
+
+        function doAgain() {
+            const item = drill.current();
+            if (!item) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            play(item);
+        }
+
+        function doNext() {
+            if (!TiulPiano.isReady()) {
+                ETUI.setText(el.status, 'Piano not loaded yet.');
+                return;
+            }
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            el.guessInput.value = '';
+            drill.next();
+            refresh();
+        }
+
+        function doReveal() {
+            const text = drill.reveal();
+            if (text === null) {
+                ETUI.setFeedback(el.feedback, 'Nothing played yet.', 'error');
+                return;
+            }
+            ETUI.setText(el.revealDisplay, text);
+            refresh();
+        }
+
+        function doCheck() {
+            const result = drill.submit(el.guessInput.value);
+            ETUI.setFeedback(el.feedback, result.message, result.correct ? 'success' : 'error');
+            if (result.scored) {
+                el.guessInput.value = '';
+                el.guessInput.blur();
+            }
+            refresh();
+        }
+
+        function doAdd() {
+            if (session.poolSize >= degrees().length) return;
+            session.poolSize++;
+            renderPool();
+            const added = parseTiulName(degrees()[session.poolSize - 1]).displayName;
+            ETUI.setFeedback(el.feedback, 'Added ' + added + ' — pool of ' + session.poolSize + '.', 'info');
+        }
+
+        function doRemove() {
+            if (session.poolSize <= CONFIG.START_POOL) return;
+            const dropped = parseTiulName(degrees()[session.poolSize - 1]).displayName;
+            session.poolSize--;
+            renderPool();
+            ETUI.setFeedback(el.feedback, 'Removed ' + dropped + ' — pool of ' + session.poolSize + '.', 'info');
+        }
+
+        function doReset() {
+            session.poolSize = CONFIG.START_POOL;
+            session.startTime = Date.now();
+            drill.reset();
+            renderPool();
+            ETUI.clearFeedback(el.feedback);
+            ETUI.setText(el.revealDisplay, '');
+            refresh();
+            ETUI.setText(el.status, 'Pool and counters reset.');
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', doPlay);
+        el.againBtn.addEventListener('click', doAgain);
+        el.nextBtn.addEventListener('click', doNext);
+        el.revealBtn.addEventListener('click', doReveal);
+        el.checkBtn.addEventListener('click', doCheck);
+        el.addBtn.addEventListener('click', doAdd);
+        el.removeBtn.addEventListener('click', doRemove);
+        el.resetBtn.addEventListener('click', doReset);
+
+        el.keySelect.addEventListener('change', function () {
+            renderPool();
+            ETUI.setText(el.status, 'Key set to ' + el.keySelect.value + '. Press Next.');
+        });
+
+        el.groupSelect.addEventListener('change', function () {
+            ETUI.setText(el.status, el.groupSelect.value + ' note(s) per group. Press Next.');
+        });
+
+        ETUI.guessField(el.guessInput, doCheck);
+
+        ETUI.shortcuts({
+            P: doPlay,
+            A: doAgain,
+            N: doNext,
+            R: doReveal,
+            '+': doAdd,
+            '=': doAdd,          // same physical key without shift
+            '-': doRemove
+        });
+
+        renderPool();
+        refresh();
+        setInterval(renderElapsed, 1000);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn],
+            keyboard: 'keyboard',
+            range: [36, 96],
+            readyMessage: 'Ready! Three degrees in the pool. Press Next.'
+        });
+    })();
+</script>
+</body>
+</html>
