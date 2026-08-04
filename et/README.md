@@ -6,7 +6,7 @@
 - <a href="https://broop.github.io/et/clefs.html" target="_blank">Clef Trainer (Single Note)</a>
 - <a href="https://broop.github.io/et/mode_sig.html" target="_blank">Modal Key Signature Trainer</a>
 - <a href="https://broop.github.io/et/directions_for_2.html" target="_blank">Directions for 2 - Movement Ear Training</a>
-- <a href="https://broop.github.io/et/directions_for_2_v2.html" target="_blank">Directions for 2 v2 - Movement Ear Training (React)</a>
+- <a href="https://broop.github.io/et/directions_for_2_v2.html" target="_blank">Directions for 2 v2 - Movement Ear Training</a>
 - <a href="https://broop.github.io/et/directions_for_2_v3.html" target="_blank">Directions for 2 v3 - Movement Ear Training (Vanilla JS)</a>
 - <a href="https://broop.github.io/et/play_check.html" target="_blank">Play Check</a>
 - <a href="https://broop.github.io/et/player.html" target="_blank">Note & Triad Player</a>
