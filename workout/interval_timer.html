@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interval Timer</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      body { margin: 24px; background: #f6f7f9; color: #111; }
+      .card {
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 14px;
+        padding: 16px 16px 18px;
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07);
+      }
+      h1 { margin: 0 0 12px; font-size: 18px; }
+      .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+      .row + .row { margin-top: 10px; }
+      label { display: grid; gap: 6px; font-size: 14px; }
+      select, input {
+        font-size: 14px;
+        padding: 8px 10px;
+        border: 1px solid #cfd6e4;
+        border-radius: 10px;
+      }
+      select:focus-visible, input:focus-visible, button:focus-visible {
+        outline: 2px solid #4a7aed;
+        outline-offset: 1px;
+      }
+      input[type="number"] { width: 110px; }
+      button {
+        font-size: 14px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cfd6e4;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:hover { background: #f0f3f8; }
+      .play-btn { background: #4a7aed; color: #fff; border-color: #4a7aed; }
+      .play-btn:hover { background: #3a66d4; }
+      .hint { margin-top: 10px; font-size: 12px; color: #555; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .pill {
+        font-size: 12px;
+        padding: 3px 8px;
+        border: 1px solid #cfd6e4;
+        border-radius: 999px;
+        background: #fff;
+        color: #333;
+      }
+      .hidden { display: none !important; }
+
+      /* ---- Run screen ---- */
+      #runScreen { text-align: center; }
+      .phase-label {
+        margin: 4px 0 0;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      /* font-size is set by fitClock(); the clamp is only a pre-JS fallback */
+      .clock {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        font-size: clamp(84px, 30vw, 220px);
+        line-height: 1.05;
+        margin: 4px 0 2px;
+        white-space: nowrap;
+      }
+      /* Off-screen twin used to measure text width at a known font size */
+      #measure {
+        position: absolute;
+        visibility: hidden;
+        pointer-events: none;
+        top: -9999px;
+        left: -9999px;
+        white-space: nowrap;
+      }
+      .size-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #555;
+      }
+      input[type="range"] { width: 160px; padding: 0; border: 0; }
+      .blue  { color: #2563eb; }
+      .green { color: #16a34a; }
+      .red   { color: #dc2626; }
+      .done  { color: #2563eb; }
+      .run-stats {
+        display: flex;
+        gap: 18px;
+        justify-content: center;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: #333;
+        margin-bottom: 14px;
+      }
+      .run-stats span { padding: 4px 10px; background: #f8f9fb; border-radius: 8px; }
+      .run-controls { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+      .run-controls button { min-width: 110px; padding: 12px 16px; font-size: 15px; }
+
+      /* ---- Fill-screen mode: card takes the whole viewport, clock gets the slack ---- */
+      body.fill { margin: 0; background: #fff; }
+      body.fill .card {
+        max-width: none;
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 10px 14px 14px;
+        display: flex;
+        flex-direction: column;
+      }
+      body.fill #runScreen {
+        flex: 1 1 auto;
+        /* min-width/height:0 stop the nowrap clock's min-content size from
+           widening its own container, which would feed back into fitClock() */
+        min-height: 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      body.fill .clock { margin: 0; min-width: 0; }
+      body.fill .run-stats { margin-bottom: 18px; }
+
+      @media (max-width: 600px) {
+        body { margin: 12px; }
+        .card { padding: 12px; }
+        .run-controls button { min-width: 92px; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <!-- ================= SETUP ================= -->
+      <div id="setupScreen">
+        <h1>Interval Timer</h1>
+
+        <div class="row">
+          <label>
+            Rounds
+            <input id="rounds" type="number" min="1" max="99" step="1" value="3" />
+          </label>
+          <label>
+            Set (seconds)
+            <input id="workSecs" type="number" min="1" max="3600" step="1" value="30" />
+          </label>
+          <label>
+            Recovery (seconds)
+            <input id="restSecs" type="number" min="0" max="3600" step="1" value="60" />
+          </label>
+          <label>
+            Get ready (seconds)
+            <input id="prepSecs" type="number" min="0" max="600" step="1" value="30" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="size-label">
+            Clock size <span id="sizePct" class="mono">100%</span>
+            <input id="clockScale" type="range" min="20" max="100" step="5" value="100" />
+          </label>
+          <label class="pill" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input id="fillOn" type="checkbox" checked style="padding:0" /> Fill screen
+          </label>
+          <label class="pill" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input id="soundOn" type="checkbox" checked style="padding:0" /> Beeps
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="startBtn" class="play-btn" type="button">Start</button>
+          <span class="pill">Total: <span id="totalTime" class="mono">—</span></span>
+        </div>
+
+        <div class="hint">
+          <span class="green" style="font-weight:700">Green</span> = work,
+          <span class="red" style="font-weight:700">Red</span> = recovery,
+          <span class="blue" style="font-weight:700">Blue</span> = get ready.
+          Sequence: get ready → (work → recovery) &times; rounds, with no recovery after the last set.
+          <br />The clock auto-sizes to the space available; the slider scales it down from there.
+          <br />Shortcuts: <span class="mono">Space</span> pause/resume, <span class="mono">F</span> fill screen,
+          <span class="mono">Esc</span> stop.
+        </div>
+      </div>
+
+      <!-- ================= RUN ================= -->
+      <div id="runScreen" class="hidden">
+        <p id="phaseLabel" class="phase-label blue">Get ready</p>
+        <div id="clock" class="clock blue">0:30</div>
+
+        <div id="runStats" class="run-stats">
+          <span>Round: <span id="roundNow" class="mono">0</span> / <span id="roundTotal" class="mono">0</span></span>
+          <span>Elapsed: <span id="elapsed" class="mono">0:00</span></span>
+          <span>Remaining: <span id="remaining" class="mono">0:00</span></span>
+        </div>
+
+        <div id="runControls" class="run-controls">
+          <button id="pauseBtn" class="play-btn" type="button">Pause</button>
+          <button id="stopBtn" type="button">Stop</button>
+          <button id="fillBtn" type="button">Fill screen</button>
+          <label class="size-label">
+            Size
+            <input id="clockScaleRun" type="range" min="20" max="100" step="5" value="100" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <span id="measure" class="clock" aria-hidden="true"></span>
+
+    <script>
+      (function () {
+        // ---------- DOM ----------
+        const setupScreen = document.getElementById("setupScreen");
+        const runScreen = document.getElementById("runScreen");
+
+        const roundsInput = document.getElementById("rounds");
+        const workInput = document.getElementById("workSecs");
+        const restInput = document.getElementById("restSecs");
+        const prepInput = document.getElementById("prepSecs");
+        const soundOnInput = document.getElementById("soundOn");
+        const fillOnInput = document.getElementById("fillOn");
+        const scaleInput = document.getElementById("clockScale");
+        const scaleRunInput = document.getElementById("clockScaleRun");
+        const sizePctSpan = document.getElementById("sizePct");
+        const totalTimeSpan = document.getElementById("totalTime");
+
+        const startBtn = document.getElementById("startBtn");
+        const pauseBtn = document.getElementById("pauseBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const fillBtn = document.getElementById("fillBtn");
+
+        const phaseLabel = document.getElementById("phaseLabel");
+        const clock = document.getElementById("clock");
+        const measure = document.getElementById("measure");
+        const runStats = document.getElementById("runStats");
+        const runControls = document.getElementById("runControls");
+        const roundNowSpan = document.getElementById("roundNow");
+        const roundTotalSpan = document.getElementById("roundTotal");
+        const elapsedSpan = document.getElementById("elapsed");
+        const remainingSpan = document.getElementById("remaining");
+
+        const SETTINGS_KEY = "workout-interval-timer-v1";
+
+        // ---------- State ----------
+        let steps = [];        // [{ kind, label, color, secs, round }]
+        let stepIndex = 0;
+        let stepEndsAt = 0;    // performance.now() ms when the current step ends
+        let pausedLeftMs = 0;  // ms left in step while paused
+        let running = false;
+        let paused = false;
+        let tickId = null;
+        let lastBeepSecond = -1;
+        let totalPlanSecs = 0;
+        let elapsedBeforeStep = 0; // whole seconds of plan finished before current step
+        let wakeLock = null;
+        let fillMode = false;
+        let lastFitKey = "";
+
+        // ---------- Helpers ----------
+        function clampInt(value, min, max, fallback) {
+          const n = parseInt(value, 10);
+          if (!Number.isFinite(n)) return fallback;
+          return Math.min(max, Math.max(min, n));
+        }
+
+        function readSettings() {
+          return {
+            rounds: clampInt(roundsInput.value, 1, 99, 3),
+            work: clampInt(workInput.value, 1, 3600, 30),
+            rest: clampInt(restInput.value, 0, 3600, 60),
+            prep: clampInt(prepInput.value, 0, 600, 30),
+            scale: clampInt(scaleInput.value, 20, 100, 100),
+            fill: !!fillOnInput.checked,
+            sound: !!soundOnInput.checked,
+          };
+        }
+
+        function writeSettingsToInputs(s) {
+          roundsInput.value = String(s.rounds);
+          workInput.value = String(s.work);
+          restInput.value = String(s.rest);
+          prepInput.value = String(s.prep);
+          setScale(s.scale);
+          fillOnInput.checked = s.fill;
+          soundOnInput.checked = s.sound;
+        }
+
+        // Keep the two size sliders (setup + run screen) and the readout in step
+        function setScale(pct) {
+          const v = String(clampInt(pct, 20, 100, 100));
+          scaleInput.value = v;
+          scaleRunInput.value = v;
+          sizePctSpan.textContent = v + "%";
+        }
+
+        function saveSettings() {
+          try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(readSettings()));
+          } catch (e) { /* storage unavailable; ignore */ }
+        }
+
+        function loadSettings() {
+          try {
+            const raw = localStorage.getItem(SETTINGS_KEY);
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            writeSettingsToInputs({
+              rounds: clampInt(s.rounds, 1, 99, 3),
+              work: clampInt(s.work, 1, 3600, 30),
+              rest: clampInt(s.rest, 0, 3600, 60),
+              prep: clampInt(s.prep, 0, 600, 30),
+              scale: clampInt(s.scale, 20, 100, 100),
+              fill: s.fill !== false,
+              sound: s.sound !== false,
+            });
+          } catch (e) { /* bad JSON; keep defaults */ }
+        }
+
+        function fmt(totalSecs) {
+          const s = Math.max(0, Math.round(totalSecs));
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          const pad = (n) => String(n).padStart(2, "0");
+          return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+        }
+
+        // ---------- Beeps (WebAudio, created lazily on the Start gesture) ----------
+        let audioCtx = null;
+
+        function ensureAudio() {
+          if (audioCtx) {
+            if (audioCtx.state === "suspended") audioCtx.resume();
+            return;
+          }
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          audioCtx = new Ctx();
+        }
+
+        function beep(freq, durSecs, gainPeak) {
+          if (!soundOnInput.checked || !audioCtx) return;
+          const t0 = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, t0);
+          gain.gain.exponentialRampToValueAtTime(gainPeak, t0 + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + durSecs);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(t0);
+          osc.stop(t0 + durSecs + 0.02);
+        }
+
+        const beepCountdown = () => beep(880, 0.12, 0.25);
+        const beepWork = () => beep(1320, 0.35, 0.3);
+        const beepRest = () => beep(660, 0.35, 0.3);
+        function beepFinish() {
+          beep(880, 0.18, 0.3);
+          setTimeout(() => beep(1108, 0.18, 0.3), 200);
+          setTimeout(() => beep(1320, 0.5, 0.3), 400);
+        }
+
+        // ---------- Screen wake lock (best effort) ----------
+        async function requestWakeLock() {
+          if (!("wakeLock" in navigator)) return;
+          try {
+            wakeLock = await navigator.wakeLock.request("screen");
+            wakeLock.addEventListener("release", () => { wakeLock = null; });
+          } catch (e) { /* denied or unsupported; nothing to do */ }
+        }
+
+        function releaseWakeLock() {
+          if (wakeLock) {
+            wakeLock.release().catch(() => {});
+            wakeLock = null;
+          }
+        }
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible" && running && !paused) requestWakeLock();
+        });
+
+        // ---------- Plan ----------
+        function buildSteps(s) {
+          const list = [];
+          if (s.prep > 0) {
+            list.push({ kind: "prep", label: "Get ready", color: "blue", secs: s.prep, round: 0 });
+          }
+          for (let r = 1; r <= s.rounds; r++) {
+            list.push({ kind: "work", label: `Work ${r}`, color: "green", secs: s.work, round: r });
+            if (r < s.rounds && s.rest > 0) {
+              list.push({ kind: "rest", label: `Recovery ${r}`, color: "red", secs: s.rest, round: r });
+            }
+          }
+          return list;
+        }
+
+        function planSeconds(s) {
+          const rests = s.rest > 0 ? (s.rounds - 1) * s.rest : 0;
+          return s.prep + s.rounds * s.work + rests;
+        }
+
+        function updateTotalPreview() {
+          totalTimeSpan.textContent = fmt(planSeconds(readSettings()));
+        }
+
+        // ---------- Clock sizing ----------
+        const PHASE_CLASSES = ["blue", "green", "red", "done"];
+        const LINE_HEIGHT = 1.05; // must match .clock in the stylesheet
+        const MEASURE_SIZE = 100; // reference font-size for the width measurement
+        const card = document.querySelector(".card");
+
+        // Measured off the card, not the clock: the card is a plain block whose
+        // width never depends on the font size we are about to choose.
+        function availableClockWidth() {
+          const cs = getComputedStyle(card);
+          const w = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          return Math.max(80, w);
+        }
+
+        // How much vertical room the clock may claim. In fill mode that is
+        // everything the other run-screen rows do not use; otherwise a slice of
+        // the viewport, so the page still reads as a normal card.
+        function availableClockHeight() {
+          if (!fillMode) return Math.min(460, Math.max(120, window.innerHeight * 0.42));
+
+          const rows = [phaseLabel, runStats, runControls];
+          let used = 0;
+          for (const el of rows) {
+            const cs = getComputedStyle(el);
+            used += el.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+          }
+          const cardStyle = getComputedStyle(card);
+          used += parseFloat(cardStyle.paddingTop) + parseFloat(cardStyle.paddingBottom);
+
+          return Math.max(60, window.innerHeight - used - 8);
+        }
+
+        // Largest font-size whose text fits the box, times the user's scale.
+        function fitClock() {
+          const availW = availableClockWidth();
+          const scale = clampInt(scaleInput.value, 20, 100, 100) / 100;
+          const text = clock.textContent || "0:00";
+
+          // Keyed on the viewport rather than the measured height, so the common
+          // per-tick call bails out before doing any layout work.
+          const key = [text.length, Math.round(availW), window.innerHeight, scale, fillMode].join("|");
+          if (key === lastFitKey) return;
+          lastFitKey = key;
+
+          const availH = availableClockHeight();
+          measure.style.fontSize = MEASURE_SIZE + "px";
+          measure.textContent = text;
+          const widthAtRef = measure.getBoundingClientRect().width || 1;
+
+          const byWidth = (availW / widthAtRef) * MEASURE_SIZE;
+          const byHeight = availH / LINE_HEIGHT;
+          clock.style.fontSize = Math.max(24, Math.min(byWidth, byHeight) * scale) + "px";
+        }
+
+        // ---------- Rendering ----------
+        function paint(color) {
+          for (const el of [phaseLabel, clock]) {
+            el.classList.remove(...PHASE_CLASSES);
+            el.classList.add(color);
+          }
+        }
+
+        function renderStepStart() {
+          const step = steps[stepIndex];
+          phaseLabel.textContent = step.label;
+          paint(step.color);
+          roundNowSpan.textContent = String(step.kind === "prep" ? 0 : step.round);
+          clock.textContent = fmt(step.secs);
+          fitClock();
+          document.title = `${fmt(step.secs)} · ${step.label}`;
+        }
+
+        function renderTick(leftMs) {
+          const step = steps[stepIndex];
+          const leftSecs = Math.ceil(leftMs / 1000);
+          clock.textContent = fmt(leftSecs);
+          fitClock(); // no-op unless the digit count or the box changed
+
+          const doneSecs = elapsedBeforeStep + (step.secs - leftMs / 1000);
+          elapsedSpan.textContent = fmt(doneSecs);
+          remainingSpan.textContent = fmt(totalPlanSecs - doneSecs);
+          document.title = `${fmt(leftSecs)} · ${step.label}`;
+
+          if (leftSecs !== lastBeepSecond) {
+            lastBeepSecond = leftSecs;
+            if (leftSecs > 0 && leftSecs <= 3) beepCountdown();
+          }
+        }
+
+        // ---------- Fill screen ----------
+        // The CSS class does the layout work; real fullscreen is requested on top
+        // of it when the browser allows it, and is not required for fill to work.
+        function setFill(on) {
+          fillMode = on;
+          document.body.classList.toggle("fill", on);
+          fillBtn.textContent = on ? "Exit fill" : "Fill screen";
+
+          if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else if (!on && document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
+
+          lastFitKey = "";
+          fitClock();
+        }
+
+        // The button and the F key change the remembered preference; stop() does not
+        function toggleFill() {
+          setFill(!fillMode);
+          fillOnInput.checked = fillMode;
+          saveSettings();
+        }
+
+        document.addEventListener("fullscreenchange", () => {
+          // Leaving fullscreen via Esc / browser chrome should drop fill layout too
+          if (!document.fullscreenElement && fillMode) {
+            setFill(false);
+            fillOnInput.checked = false;
+          }
+        });
+
+        window.addEventListener("resize", fitClock);
+        if (window.visualViewport) window.visualViewport.addEventListener("resize", fitClock);
+
+        // ---------- Engine ----------
+        function startStep(index) {
+          stepIndex = index;
+          const step = steps[index];
+          elapsedBeforeStep = steps.slice(0, index).reduce((sum, st) => sum + st.secs, 0);
+          stepEndsAt = performance.now() + step.secs * 1000;
+          lastBeepSecond = -1;
+          renderStepStart();
+          if (step.kind === "work") beepWork();
+          else if (step.kind === "rest") beepRest();
+        }
+
+        function tick() {
+          if (!running || paused) return;
+          const leftMs = stepEndsAt - performance.now();
+          if (leftMs <= 0) {
+            if (stepIndex + 1 < steps.length) {
+              startStep(stepIndex + 1);
+              renderTick(stepEndsAt - performance.now());
+            } else {
+              finish();
+            }
+            return;
+          }
+          renderTick(leftMs);
+        }
+
+        function startTicking() {
+          if (tickId !== null) clearInterval(tickId);
+          tickId = setInterval(tick, 100);
+        }
+
+        function stopTicking() {
+          if (tickId !== null) {
+            clearInterval(tickId);
+            tickId = null;
+          }
+        }
+
+        function start() {
+          const s = readSettings();
+          writeSettingsToInputs(s); // reflect any clamping back to the user
+          saveSettings();
+
+          steps = buildSteps(s);
+          if (steps.length === 0) return;
+
+          totalPlanSecs = planSeconds(s);
+          roundTotalSpan.textContent = String(s.rounds);
+
+          ensureAudio();
+          requestWakeLock();
+
+          running = true;
+          paused = false;
+          pauseBtn.textContent = "Pause";
+          pauseBtn.disabled = false;
+
+          setupScreen.classList.add("hidden");
+          runScreen.classList.remove("hidden");
+
+          setFill(s.fill);
+
+          startStep(0);
+          renderTick(steps[0].secs * 1000);
+          startTicking();
+        }
+
+        function togglePause() {
+          if (!running) return;
+          if (!paused) {
+            paused = true;
+            pausedLeftMs = Math.max(0, stepEndsAt - performance.now());
+            stopTicking();
+            pauseBtn.textContent = "Resume";
+            phaseLabel.textContent = "Paused";
+            releaseWakeLock();
+          } else {
+            paused = false;
+            stepEndsAt = performance.now() + pausedLeftMs;
+            pauseBtn.textContent = "Pause";
+            phaseLabel.textContent = steps[stepIndex].label;
+            requestWakeLock();
+            startTicking();
+          }
+        }
+
+        function stop() {
+          running = false;
+          paused = false;
+          stopTicking();
+          releaseWakeLock();
+          setFill(false); // layout only; the saved "Fill screen" preference stands
+          document.title = "Interval Timer";
+          runScreen.classList.add("hidden");
+          setupScreen.classList.remove("hidden");
+          updateTotalPreview();
+        }
+
+        function finish() {
+          running = false;
+          paused = false;
+          stopTicking();
+          releaseWakeLock();
+          beepFinish();
+
+          paint("done");
+          phaseLabel.textContent = "Done";
+          clock.textContent = fmt(0);
+          fitClock();
+          elapsedSpan.textContent = fmt(totalPlanSecs);
+          remainingSpan.textContent = fmt(0);
+          roundNowSpan.textContent = roundTotalSpan.textContent;
+          pauseBtn.disabled = true;
+          stopBtn.textContent = "Back to setup";
+          document.title = "Done · Interval Timer";
+        }
+
+        // ---------- Wire up ----------
+        startBtn.addEventListener("click", start);
+        pauseBtn.addEventListener("click", togglePause);
+        stopBtn.addEventListener("click", () => {
+          stopBtn.textContent = "Stop";
+          pauseBtn.disabled = false;
+          pauseBtn.textContent = "Pause";
+          stop();
+        });
+
+        fillBtn.addEventListener("click", toggleFill);
+
+        for (const input of [roundsInput, workInput, restInput, prepInput]) {
+          input.addEventListener("input", updateTotalPreview);
+          input.addEventListener("change", saveSettings);
+        }
+
+        for (const slider of [scaleInput, scaleRunInput]) {
+          slider.addEventListener("input", () => {
+            setScale(slider.value);
+            fitClock();
+          });
+          slider.addEventListener("change", saveSettings);
+        }
+
+        soundOnInput.addEventListener("change", saveSettings);
+        fillOnInput.addEventListener("change", () => {
+          if (running) setFill(fillOnInput.checked);
+          saveSettings();
+        });
+
+        document.addEventListener("keydown", (e) => {
+          const onSetup = !setupScreen.classList.contains("hidden");
+          const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+
+          if (e.key === "Enter" && onSetup && document.activeElement !== startBtn) {
+            start();
+          } else if (e.code === "Space" && running) {
+            e.preventDefault();
+            togglePause();
+          } else if ((e.key === "f" || e.key === "F") && !onSetup && !typing) {
+            toggleFill();
+          } else if (e.key === "Escape" && !onSetup) {
+            stopBtn.click();
+          }
+        });
+
+        // ---------- Start ----------
+        loadSettings();
+        updateTotalPreview();
+        fitClock();
+      })();
+    </script>
+  </body>
+</html>
