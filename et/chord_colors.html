@@ -95,28 +95,6 @@
             display: inline-block;
         }
 
-        .log {
-            margin-top: 10px;
-            padding: 10px 12px;
-            background: #0f0f23;
-            border: 1px solid #222;
-            border-radius: 6px;
-            min-height: 200px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .log-line { margin: 0; }
-        .log-line.info { color: #778ca3; }
-        .log-line.note { color: #c8d6e5; }
-        .log-line.correct { color: #2ed573; }
-        .log-line.wrong { color: #ff6b6b; }
-        .log-line.reveal { color: #54a0ff; }
-        .log-line.heading { color: #00d2d3; font-weight: 700; }
-        .log-line.warn { color: #feca57; }
-
         .stats {
             margin-top: 8px;
             font-size: 12px;
@@ -169,8 +147,6 @@
     <div class="available-chords">
         chords: <span id="availableChords" class="chords">-</span>
     </div>
-
-    <div id="log" class="log"></div>
 </div>
 
 <script src="tiul-constants.js"></script>
@@ -291,7 +267,6 @@
         const revealBtn = document.getElementById('revealBtn');
         const revealDisplay = document.getElementById('revealDisplay');
         const levelUpBtn = document.getElementById('levelUpBtn');
-        const logDiv = document.getElementById('log');
         const countDisplay = document.getElementById('countDisplay');
         const elapsedDisplay = document.getElementById('elapsedDisplay');
         const levelDisplay = document.getElementById('levelDisplay');
@@ -318,22 +293,6 @@
             opt.value = i;
             opt.textContent = i;
             octaveShiftSelect.appendChild(opt);
-        }
-
-        // ============================================================
-        // LOG
-        // ============================================================
-
-        function log(text, cls) {
-            const p = document.createElement('p');
-            p.className = 'log-line ' + (cls || 'note');
-            p.textContent = text;
-            logDiv.appendChild(p);
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-
-        function clearLog() {
-            logDiv.innerHTML = '';
         }
 
         // ============================================================
@@ -433,20 +392,14 @@
         // ============================================================
 
         function doStart() {
-            if (!TiulPiano.isReady()) { log('Piano not loaded yet.', 'warn'); return; }
+            if (!TiulPiano.isReady()) return;
 
             const keyName = keySelect.value;
             const level = parseInt(levelSelect.value, 10);
             const octaveShift = parseInt(octaveShiftSelect.value, 10);
 
             session = createSession(keyName, level, octaveShift);
-            clearLog();
             revealDisplay.textContent = '';
-
-            log('Chord Colors Training Started!', 'heading');
-            log('Key: ' + keyName + ' | Level: ' + session.level + ' | Octave shift: ' + octaveShift, 'info');
-            log('Commands: (n)ext, (a)gain, (m)elodic, (r)eveal, (l)evel up', 'info');
-            log('', 'info');
 
             updateAvailableChords();
 
@@ -456,7 +409,6 @@
             session.count++;
             playHarmonic(session);
 
-            log('Chord #' + session.count + ' played.', 'info');
             setCommandsEnabled(true);
             updateStats();
         }
@@ -472,43 +424,33 @@
             session.count++;
             playHarmonic(session);
 
-            log('Chord #' + session.count + ' played.', 'info');
             updateStats();
         }
 
         function doAgain() {
             if (!session) return;
             playAgain(session);
-            log('(replayed)', 'info');
         }
 
         function doMelodic() {
             if (!session) return;
             playMelodic(session);
-            log('(melodic)', 'info');
         }
 
         function doReveal() {
             if (!session) return;
             if (session.currentChordName) {
                 revealDisplay.textContent = session.currentChordName;
-                log('Revealed: ' + session.currentChordName, 'reveal');
                 updateStats();
-            } else {
-                log('No chord played yet.', 'warn');
             }
         }
 
         function doLevelUp() {
             if (!session) return;
-            if (session.level >= MAX_LEVEL || session.level >= session.chordNames.length) {
-                log('Already at maximum level (' + session.level + ')', 'warn');
-                return;
-            }
+            if (session.level >= MAX_LEVEL || session.level >= session.chordNames.length) return;
             session.level++;
             updateAvailableChords();
             updateStats();
-            log('Level up! Now level ' + session.level + ' - Chords: ' + getAvailableChords(session).join(', '), 'heading');
         }
 
         // ============================================================
@@ -538,14 +480,12 @@
         // ============================================================
 
         function initAudio() {
-            log('Loading piano samples...', 'info');
             TiulPiano.init(
                 function () {
-                    log('Piano loaded. Select key and level, then press start.', 'heading');
                     startBtn.disabled = false;
                 },
                 function (e) {
-                    log('Error loading piano: ' + e.message, 'wrong');
+                    console.error('Error loading piano: ' + e.message);
                 }
             );
         }

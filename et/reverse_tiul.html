@@ -99,28 +99,6 @@
             display: inline-block;
         }
 
-        .log {
-            margin-top: 10px;
-            padding: 10px 12px;
-            background: #0f0f23;
-            border: 1px solid #222;
-            border-radius: 6px;
-            min-height: 200px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        .log-line { margin: 0; }
-        .log-line.info { color: #778ca3; }
-        .log-line.note { color: #c8d6e5; }
-        .log-line.correct { color: #2ed573; }
-        .log-line.wrong { color: #ff6b6b; }
-        .log-line.reveal { color: #54a0ff; }
-        .log-line.heading { color: #00d2d3; font-weight: 700; }
-        .log-line.warn { color: #feca57; }
-
         .guess-row {
             display: flex;
             gap: 8px;
@@ -203,8 +181,6 @@
         <span>wrong: <span class="val" id="wrongCount">0</span></span>
         <span>grade: <span class="val" id="grade">-</span></span>
     </div>
-
-    <div id="log" class="log"></div>
 </div>
 
 <script src="tiul-constants.js"></script>
@@ -226,7 +202,6 @@
         const revealDisplay = document.getElementById('revealDisplay');
         const checkBtn = document.getElementById('checkBtn');
         const guessInput = document.getElementById('guessInput');
-        const logDiv = document.getElementById('log');
         const keyLabel = document.getElementById('keyLabel');
         const availableNotesEl = document.getElementById('availableNotes');
         const playedCountEl = document.getElementById('playedCount');
@@ -314,22 +289,6 @@
         }
 
         // ============================================================
-        // LOG OUTPUT (mimics CLI print)
-        // ============================================================
-
-        function log(text, cls) {
-            const p = document.createElement('p');
-            p.className = 'log-line ' + (cls || 'note');
-            p.textContent = text;
-            logDiv.appendChild(p);
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-
-        function clearLog() {
-            logDiv.innerHTML = '';
-        }
-
-        // ============================================================
         // UI UPDATE
         // ============================================================
 
@@ -357,33 +316,21 @@
         // ============================================================
 
         function doStart() {
-            if (!TiulPiano.isReady()) { log('Piano not loaded yet.', 'warn'); return; }
+            if (!TiulPiano.isReady()) return;
 
             const key = keySelect.value;
             const sampleIdx = parseInt(sampleSelect.value, 10);
             session = createSession(key, sampleIdx);
             session.started = true;
 
-            clearLog();
             revealDisplay.textContent = '';
-
-            // Show info like the Python verbose output
-            const sampleDegrees = new Set(SAMPLES[sampleIdx]);
-            const availableNotes = [...sampleDegrees].sort((a, b) => a - b).map(i => session.keyDegrees[i]);
 
             keyLabel.textContent = key;
             availableNotesEl.textContent = session.keyDegrees.map(n => parseTiulName(n).displayName).join(', ');
 
-            log('Reverse Tiul Training Started!', 'heading');
-            log('Key: ' + key + ' | Sample: ' + sampleIdx, 'info');
-            log('Available notes in sample: ' + availableNotes.map(n => parseTiulName(n).displayName).join(', '), 'info');
-            log('Commands: (n)ext, (a)gain, (r)eveal, (c)heck', 'info');
-            log('', 'info');
-
             // Play first note
             playCurrentNote(session);
             session.count++;
-            log('Note #' + session.count + ' played.', 'info');
 
             setCommandsEnabled(true);
             updateStats();
@@ -399,7 +346,6 @@
             getNextNote(session);
             playCurrentNote(session);
             session.count++;
-            log('Note #' + session.count + ' played.', 'info');
             updateStats();
 
             if (testModeCheck.checked) {
@@ -411,25 +357,18 @@
         function doAgain() {
             if (!session || !session.started) return;
             playCurrentNote(session, session.currentOctave);
-            log('(replayed)', 'info');
         }
 
         function doReveal() {
             if (!session || !session.started) return;
             if (session.lastPlayedDisplay) {
                 revealDisplay.textContent = session.lastPlayedDisplay;
-                log('Revealed: ' + session.lastPlayedDisplay, 'reveal');
-            } else {
-                log('No note played yet.', 'warn');
             }
         }
 
         function doCheck() {
             if (!session || !session.started) return;
-            if (!session.lastPlayedDisplay) {
-                log('No note played yet!', 'warn');
-                return;
-            }
+            if (!session.lastPlayedDisplay) return;
 
             const raw = guessInput.value.trim();
             if (!raw) {
@@ -440,7 +379,6 @@
             // Normalize: accept # for sharp, - or b for flat
             const m = /^([A-Ga-g])\s*([#bB\-]*)$/.exec(raw);
             if (!m) {
-                log("Invalid input. Use note name like C, F#, Eb, or B-", 'warn');
                 guessInput.value = '';
                 guessInput.focus();
                 return;
@@ -461,10 +399,8 @@
             // The correct answer comes from parseTiulName which uses b for flats
             if (userGuess.toUpperCase() === correctDisplay.toUpperCase()) {
                 session.correctCount++;
-                log('Correct! The note was ' + correctDisplay, 'correct');
             } else {
                 session.wrongCount++;
-                log('Incorrect.', 'wrong');
             }
 
             guessInput.value = '';
@@ -511,14 +447,12 @@
         // ============================================================
 
         function initAudio() {
-            log('Loading piano samples...', 'info');
             TiulPiano.init(
                 function () {
-                    log('Piano loaded. Select key and sample, then press start.', 'heading');
                     startBtn.disabled = false;
                 },
                 function (e) {
-                    log('Error loading piano: ' + e.message, 'wrong');
+                    console.error('Error loading piano: ' + e.message);
                 }
             );
         }
