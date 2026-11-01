@@ -42,7 +42,7 @@
 
     <div class="row">
         <label>
-            Set
+            Source
             <select id="setSelect"></select>
         </label>
         <label>
@@ -93,7 +93,7 @@
     <div class="hint">
         Shortcuts: <b>P</b>=Play, <b>A</b>=Again, <b>H</b>=Harmonic, <b>F</b>=First note, <b>N</b>=Next group,
         <b>B</b>=Previous group, <b>R</b>=Reveal.<br/>
-        Atonal lines of 12&ndash;13 notes within a fixed tessitura.
+        Atonal lines of 10&ndash;13 notes, from the original exercises only.
         Work with <b>First note</b> as the anchor, write the line down, then reveal or type it to
         check &mdash; order matters, octaves and enharmonics do not (<code>Ab</code> = <code>G#</code>).
         <b>Harmonic</b> stacks the whole group as one sonority.
@@ -163,7 +163,7 @@
         SETS.forEach(function (name) {
             const opt = document.createElement('option');
             opt.value = name;
-            opt.textContent = 'Nachashim ' + name + ' (' + NACHASHIM[name].groups.length + ' groups)';
+            opt.textContent = name + ' (' + NACHASHIM[name].groups.length + ' groups)';
             el.setSelect.appendChild(opt);
         });
 
@@ -197,7 +197,9 @@
                     ETUI.setText(el.status, 'Piano not loaded yet.');
                     return;
                 }
-                if (mode === 'harmonic') {
+                // 'stacked', not 'harmonic': ETDrill.next() always passes
+                // 'harmonic', and moving to a group should play the line.
+                if (mode === 'stacked') {
                     // The docstring's optional harmonic mode: the whole
                     // group as one sonority.
                     ETUI.playChord(item.midis, CONFIG.HARMONIC_DURATION);
@@ -268,7 +270,7 @@
 
         function doPlay() { drill.play('melodic'); renderNav(); }
         function doAgain() { drill.play('melodic'); }
-        function doHarmonic() { drill.play('harmonic'); }
+        function doHarmonic() { drill.play('stacked'); }
 
         function doFirst() {
             const item = drill.ensure();
@@ -309,7 +311,7 @@
             session.groupIdx = 0;
             clearGroupUI();
             renderNav();
-            ETUI.setText(el.status, 'Nachashim ' + session.set + '. Press Play.');
+            ETUI.setText(el.status, session.set + '. Press Play.');
         }
 
         // ---- wiring ----
@@ -343,7 +345,7 @@
             status: el.status,
             enable: [el.playBtn],
             keyboard: 'keyboard',
-            range: [45, 96],
+            range: [44, 96],
             readyMessage: 'Ready! ' + groups().length + ' groups. Press Play for group 1.'
         });
     })();

@@ -17,6 +17,14 @@ const TiulPiano = (function () {
     const MIDI_MAX = 108; // C8 = file 88.mp3
     const TOTAL_FILES = 88;
 
+    // The samples die away within about 1.3s. options.sustain freezes the
+    // sample by looping a single pitch period, while the note decays to
+    // SUSTAIN_END_GAIN. One period can't beat: longer loops of a real piano
+    // note wobble, because its strings aren't perfectly in tune.
+    const SUSTAIN_MIN_DURATION = 1.0;
+    const SUSTAIN_LOOP_START = 0.5;
+    const SUSTAIN_END_GAIN = 0.5;
+
     let audioCtx = null;
     let buffers = {};      // midi number -> AudioBuffer
     let pending = {};      // midi number -> in-flight fetch for out-of-range notes
@@ -106,6 +114,8 @@ const TiulPiano = (function () {
     // out and when the returned stop function is called. Defaults to 0.05.
     // Pass 0 for a hard cut - be aware that stopping a sample while it still
     // has amplitude can produce an audible click.
+    // options.sustain = true holds notes longer than SUSTAIN_MIN_DURATION at
+    // their full length instead of letting the sample run out. Off by default.
     function play(midi, duration, options) {
         if (!ready || !audioCtx) return null;
         resumeCtx();
@@ -127,6 +137,14 @@ const TiulPiano = (function () {
         const source = audioCtx.createBufferSource();
         source.buffer = buf;
 
+        const sustain = !!(options && options.sustain)
+            && duration > SUSTAIN_MIN_DURATION;
+        if (sustain) {
+            source.loop = true;
+            source.loopStart = SUSTAIN_LOOP_START;
+            source.loopEnd = SUSTAIN_LOOP_START + 1 / (440 * Math.pow(2, (midi - 69) / 12));
+        }
+
         // Create gain node for fade-out at end of duration
         const gain = audioCtx.createGain();
         gain.gain.setValueAtTime(1, audioCtx.currentTime);
@@ -140,7 +158,11 @@ const TiulPiano = (function () {
         // Auto-stop after duration, with a fade unless one was waived
         if (duration && duration > 0) {
             const stopTime = audioCtx.currentTime + duration;
-            if (fade > 0) {
+            if (sustain) {
+                gain.gain.linearRampToValueAtTime(SUSTAIN_END_GAIN, stopTime - fade);
+                gain.gain.linearRampToValueAtTime(0, stopTime);
+                source.stop(stopTime + 0.01);
+            } else if (fade > 0) {
                 gain.gain.setValueAtTime(1, stopTime - fade);
                 gain.gain.linearRampToValueAtTime(0, stopTime);
                 source.stop(stopTime + 0.01);

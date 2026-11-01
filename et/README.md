@@ -26,3 +26,4 @@
 - <a href="https://broop.github.io/et/bach_progressions.html" target="_blank">Bach Progressions - Ear Training</a>
 - <a href="https://broop.github.io/et/hindy.html" target="_blank">Hindy - Dictation Training</a>
 - <a href="https://broop.github.io/et/nachashim.html" target="_blank">Nachashim - Melodic Dictation</a>
+- <a href="https://broop.github.io/et/chorale_dictation.html" target="_blank">Chorale Dictation - Bach Melody &amp; Bass</a>

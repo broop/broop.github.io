@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Chorale Dictation</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .guess-input.r-input {
+            min-width: 0;
+            width: 90px;
+        }
+
+        .chorale-info {
+            margin: 10px 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .chorale-info:empty { display: none; }
+
+        .score {
+            margin-top: 12px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+        }
+
+        .score[hidden] { display: none; }
+
+        .score-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .answer-voice {
+            fill: #2563eb;
+            stroke: #2563eb;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Chorale Dictation</h1>
+
+    <div class="row">
+        <label>
+            Key
+            <select id="keySelect"></select>
+        </label>
+        <label>
+            Chorale
+            <select id="matchSelect"></select>
+        </label>
+        <label>
+            Riemenschneider no.
+            <input type="number" id="rInput" class="guess-input r-input" min="1" max="371" autocomplete="off"/>
+        </label>
+        <button id="randomBtn" style="align-self:end">Random <span class="shortcut">(N)</span></button>
+    </div>
+
+    <div class="row">
+        <label>
+            Voice
+            <select id="voiceSelect">
+                <option value="soprano" selected>Melody (soprano)</option>
+                <option value="bass">Bass</option>
+            </select>
+        </label>
+        <label>
+            Phrase
+            <select id="phraseSelect"></select>
+        </label>
+        <label>
+            Tempo
+            <select id="tempoSelect">
+                <option value="40">Very slow (&#9833; = 40)</option>
+                <option value="50" selected>Slow (&#9833; = 50)</option>
+                <option value="66">Medium (&#9833; = 66)</option>
+            </select>
+        </label>
+    </div>
+
+    <div id="chorale" class="chorale-info"></div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="firstBtn" disabled>First note <span class="shortcut">(F)</span></button>
+        <button id="showBtn">Show <span class="shortcut">(S)</span></button>
+    </div>
+
+    <div id="firstNote" class="chorale-info"></div>
+
+    <div id="score" class="score" hidden>
+        <div id="scoreTitle" class="score-title"></div>
+        <div id="notation"></div>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>F</b>=First note, <b>S</b>=Show, <b>N</b>=Random chorale.<br/>
+        Type a number from 1 to 371 and press Enter, pick a key to list its chorales, or take a random one
+        (from the chosen key, if there is one). Each chorale is split into phrases
+        at its fermatas. <b>Play</b> the phrase as often as you like. <b>Show</b> gives the whole chorale,
+        with the phrase you were writing in blue. Repeats are played once.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-ui.js"></script>
+<script src="chorales-data.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // Web counterpart of src/bach_dictation.py, over a whole chorale
+        // rather than a phrase. src/export_chorales.py writes
+        // chorales-data.js: a timed soprano and bass line per chorale,
+        // plus the vocal parts as ABC for the Show panel.
+        // ============================================================
+
+        const CONFIG = {
+            CHORALE_COUNT: 371,
+            START_CHORALE: 10,
+            MIDI_RANGE: [36, 81],     // lowest and highest note in the two lines
+            FERMATA_BEATS: 1,
+            FIRST_NOTE_DURATION: 1.5,
+            ARTICULATION: 0.95,       // audible gap between repeated notes
+            STAFF_WIDTH: 860
+        };
+
+        // ---- DOM ----
+
+        const el = {
+            voiceSelect: ETUI.$('voiceSelect'),
+            keySelect: ETUI.$('keySelect'),
+            matchSelect: ETUI.$('matchSelect'),
+            phraseSelect: ETUI.$('phraseSelect'),
+            tempoSelect: ETUI.$('tempoSelect'),
+            rInput: ETUI.$('rInput'),
+            randomBtn: ETUI.$('randomBtn'),
+            chorale: ETUI.$('chorale'),
+            playBtn: ETUI.$('playBtn'),
+            firstBtn: ETUI.$('firstBtn'),
+            firstNote: ETUI.$('firstNote'),
+            showBtn: ETUI.$('showBtn'),
+            score: ETUI.$('score'),
+            scoreTitle: ETUI.$('scoreTitle'),
+            notation: ETUI.$('notation'),
+            status: ETUI.$('status')
+        };
+
+        const session = {
+            r: null,
+            timers: []
+        };
+
+        function current() { return CHORALES[session.r]; }
+
+        // [start, end, sopranoFirst, sopranoCount, bassFirst, bassCount,
+        //  sopranoFirstName, bassFirstName]
+        function currentPhrase() {
+            return current().phrases[parseInt(el.phraseSelect.value, 10)];
+        }
+
+        function currentLine() {
+            const phrase = currentPhrase();
+            return current()[el.voiceSelect.value].filter(function (event) {
+                return event[1] >= phrase[0] && event[1] < phrase[1];
+            });
+        }
+
+        // ---- finding by key ----
+
+        const ALL_NUMBERS = Object.keys(CHORALES).map(Number);
+
+        function inKey(key) {
+            return ALL_NUMBERS.filter(function (r) { return !key || CHORALES[r].key === key; });
+        }
+
+        function matches() { return inKey(el.keySelect.value); }
+
+        function addOption(select, value, text) {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = text;
+            select.appendChild(opt);
+        }
+
+        function renderKeys() {
+            addOption(el.keySelect, '', 'All keys (' + ALL_NUMBERS.length + ')');
+            const keys = Array.from(new Set(ALL_NUMBERS.map(r => CHORALES[r].key))).sort();
+            keys.forEach(function (key) {
+                addOption(el.keySelect, key, key + ' (' + inKey(key).length + ')');
+            });
+        }
+
+        function renderMatches() {
+            el.matchSelect.innerHTML = '';
+            matches().forEach(function (r) { addOption(el.matchSelect, r, 'R' + r); });
+        }
+
+        // ---- playback ----
+
+        function stop() {
+            session.timers.forEach(clearTimeout);
+            session.timers = [];
+            TiulPiano.stopAll();
+        }
+
+        // Starts on the phrase's first note: a few voices open with rests.
+        function play() {
+            if (!TiulPiano.isReady()) return;
+            stop();
+
+            const line = currentLine();
+            const secPerBeat = 60 / parseInt(el.tempoSelect.value, 10);
+            const start = line[0][1];
+            let held = 0;
+            let end = 0;
+
+            line.forEach(function (event) {
+                const midi = event[0];
+                const fermata = event[3] ? CONFIG.FERMATA_BEATS * secPerBeat : 0;
+                const at = (event[1] - start) * secPerBeat + held;
+                const length = event[2] * secPerBeat + fermata;
+                session.timers.push(setTimeout(function () {
+                    TiulPiano.play(midi, length * CONFIG.ARTICULATION, { sustain: true });
+                }, at * 1000));
+                held += fermata;
+                end = at + length;
+            });
+
+            ETUI.setText(el.status, 'Playing...');
+            session.timers.push(setTimeout(function () {
+                ETUI.setText(el.status, 'Finished. Play again, or Show.');
+            }, end * 1000));
+        }
+
+        function firstNote() {
+            if (!TiulPiano.isReady()) return;
+            stop();
+            const name = currentPhrase()[el.voiceSelect.value === 'soprano' ? 6 : 7];
+            el.firstNote.textContent = 'First note: ' + name;
+            TiulPiano.play(currentLine()[0][0], CONFIG.FIRST_NOTE_DURATION, { sustain: true });
+        }
+
+        // ---- show ----
+
+        function hideScore() {
+            el.score.hidden = true;
+            el.notation.innerHTML = '';
+            el.showBtn.firstChild.textContent = 'Show ';
+        }
+
+        function showScore() {
+            const c = current();
+            el.scoreTitle.textContent = 'R' + session.r + ' — ' + c.title + ' (BWV ' + c.bwv + ')';
+            el.score.hidden = false;
+            el.showBtn.firstChild.textContent = 'Hide ';
+
+            ABCJS.renderAbc(el.notation, c.abc, {
+                add_classes: true,
+                responsive: 'resize',
+                staffwidth: CONFIG.STAFF_WIDTH
+            });
+
+            const soprano = el.voiceSelect.value === 'soprano';
+            const phrase = currentPhrase();
+            const first = phrase[soprano ? 2 : 4];
+            const count = phrase[soprano ? 3 : 5];
+            const voice = soprano ? 0 : c.voices - 1;
+            const notes = el.notation.querySelectorAll('.abcjs-note.abcjs-v' + voice);
+            Array.from(notes).slice(first, first + count).forEach(function (node) {
+                node.classList.add('answer-voice');
+            });
+        }
+
+        function toggleScore() {
+            if (el.score.hidden) showScore();
+            else hideScore();
+        }
+
+        // ---- choosing ----
+
+        function load(r) {
+            stop();
+            hideScore();
+            el.firstNote.textContent = '';
+            session.r = r;
+            el.rInput.value = r;
+            el.matchSelect.value = r;
+            const c = current();
+            el.phraseSelect.innerHTML = '';
+            c.phrases.forEach(function (phrase, i) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = (i + 1) + ' of ' + c.phrases.length;
+                el.phraseSelect.appendChild(opt);
+            });
+            el.chorale.textContent = 'R' + r + ' · ' + c.key + ' · ' + c.time;
+            ETUI.setText(el.status, TiulPiano.isReady() ? 'Press Play.' : el.status.textContent);
+        }
+
+        function loadTyped() {
+            const r = Number(el.rInput.value);
+            if (!CHORALES[r]) {
+                ETUI.setText(el.status, 'Pick a number from 1 to ' + CONFIG.CHORALE_COUNT + '.');
+                return;
+            }
+            if (CHORALES[r].key !== el.keySelect.value && el.keySelect.value) {
+                el.keySelect.value = '';
+                renderMatches();
+            }
+            load(r);
+            el.rInput.blur();
+        }
+
+        function loadRandom() {
+            const others = matches().filter(r => r !== session.r);
+            if (others.length === 0) return;   // the key's only chorale
+            load(others[Math.floor(Math.random() * others.length)]);
+        }
+
+        function changeKey() {
+            renderMatches();
+            const pool = matches();
+            load(pool.includes(session.r) ? session.r : pool[0]);
+        }
+
+        // The score stays hidden so a shown phrase can't give away the next one.
+        function changeLine() {
+            stop();
+            hideScore();
+            el.firstNote.textContent = '';
+            ETUI.setText(el.status, 'Press Play.');
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', play);
+        el.firstBtn.addEventListener('click', firstNote);
+        el.showBtn.addEventListener('click', toggleScore);
+        el.randomBtn.addEventListener('click', loadRandom);
+        el.rInput.addEventListener('change', loadTyped);
+        el.keySelect.addEventListener('change', changeKey);
+        el.matchSelect.addEventListener('change', function () {
+            load(Number(el.matchSelect.value));
+        });
+        el.voiceSelect.addEventListener('change', changeLine);
+        el.phraseSelect.addEventListener('change', changeLine);
+        el.tempoSelect.addEventListener('change', stop);
+
+        ETUI.guessField(el.rInput, function () { el.rInput.blur(); });
+
+        ETUI.shortcuts({
+            P: play,
+            F: firstNote,
+            S: toggleScore,
+            N: loadRandom
+        });
+
+        renderKeys();
+        renderMatches();
+        load(CONFIG.START_CHORALE);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn, el.firstBtn],
+            keyboard: 'keyboard',
+            range: CONFIG.MIDI_RANGE,
+            readyMessage: 'Ready! Press Play.'
+        });
+    })();
+</script>
+</body>
+</html>
