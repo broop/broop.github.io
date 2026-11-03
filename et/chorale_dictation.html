@@ -29,6 +29,13 @@
 
         .score[hidden] { display: none; }
 
+        .score-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
         .score-title {
             font-size: 15px;
             font-weight: 600;
@@ -90,10 +97,20 @@
     <div class="row">
         <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
         <button id="firstBtn" disabled>First note <span class="shortcut">(F)</span></button>
+        <button id="startBtn">Start <span class="shortcut">(T)</span></button>
         <button id="showBtn">Show <span class="shortcut">(S)</span></button>
     </div>
 
     <div id="firstNote" class="chorale-info"></div>
+
+    <div id="start" class="score" hidden>
+        <div class="score-head">
+            <div id="startTitle" class="score-title"></div>
+            <button id="revealBtn">Reveal next <span class="shortcut">(R)</span>
+                <span id="revealCount" class="shortcut"></span></button>
+        </div>
+        <div id="startNotation"></div>
+    </div>
 
     <div id="score" class="score" hidden>
         <div id="scoreTitle" class="score-title"></div>
@@ -103,10 +120,12 @@
     <div id="status" class="status">Loading piano samples...</div>
 
     <div class="hint">
-        Shortcuts: <b>P</b>=Play, <b>F</b>=First note, <b>S</b>=Show, <b>N</b>=Random chorale.<br/>
+        Shortcuts: <b>P</b>=Play, <b>F</b>=First note, <b>T</b>=Start, <b>R</b>=Reveal next, <b>S</b>=Show, <b>N</b>=Random chorale.<br/>
         Type a number from 1 to 371 and press Enter, pick a key to list its chorales, or take a random one
         (from the chosen key, if there is one). Each chorale is split into phrases
-        at its fermatas. <b>Play</b> the phrase as often as you like. <b>Show</b> gives the whole chorale,
+        at its fermatas. <b>Play</b> the phrase as often as you like.
+        <b>Start</b> sets out the phrase's bars on a staff with only its first note filled in;
+        <b>Reveal next</b> adds one more note at a time, to check your dictation as you go. <b>Show</b> gives the whole chorale,
         with the phrase you were writing in blue. Repeats are played once.
     </div>
 
@@ -135,7 +154,11 @@
             FERMATA_BEATS: 1,
             FIRST_NOTE_DURATION: 1.5,
             ARTICULATION: 0.95,       // audible gap between repeated notes
-            STAFF_WIDTH: 860
+            STAFF_WIDTH: 860,
+            START_MAX_BARS_PER_LINE: 6,
+            UNITS_PER_QUARTER: 8,     // the ABC unit is a 32nd, as in the exporter
+            // written lengths in 32nds, longest first: whole, dotted half, ... 32nd
+            NOTE_VALUES: [48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 1]
         };
 
         // ---- DOM ----
@@ -152,6 +175,12 @@
             playBtn: ETUI.$('playBtn'),
             firstBtn: ETUI.$('firstBtn'),
             firstNote: ETUI.$('firstNote'),
+            startBtn: ETUI.$('startBtn'),
+            start: ETUI.$('start'),
+            startTitle: ETUI.$('startTitle'),
+            revealBtn: ETUI.$('revealBtn'),
+            revealCount: ETUI.$('revealCount'),
+            startNotation: ETUI.$('startNotation'),
             showBtn: ETUI.$('showBtn'),
             score: ETUI.$('score'),
             scoreTitle: ETUI.$('scoreTitle'),
@@ -161,7 +190,8 @@
 
         const session = {
             r: null,
-            timers: []
+            timers: [],
+            revealed: 0      // notes shown on the Start staff
         };
 
         function current() { return CHORALES[session.r]; }
@@ -172,11 +202,20 @@
             return current().phrases[parseInt(el.phraseSelect.value, 10)];
         }
 
-        function currentLine() {
+        function inPhrase(event) {
             const phrase = currentPhrase();
-            return current()[el.voiceSelect.value].filter(function (event) {
-                return event[1] >= phrase[0] && event[1] < phrase[1];
-            });
+            return event[1] >= phrase[0] && event[1] < phrase[1];
+        }
+
+        function currentLine() {
+            return current()[el.voiceSelect.value].filter(inPhrase);
+        }
+
+        // The line's notes spelled, e.g. 'Bb4', in step with currentLine().
+        function currentNames() {
+            const voice = el.voiceSelect.value;
+            const names = current()[voice + 'Names'].split(' ');
+            return names.filter(function (name, i) { return inPhrase(current()[voice][i]); });
         }
 
         // ---- finding by key ----
@@ -254,6 +293,183 @@
             TiulPiano.play(currentLine()[0][0], CONFIG.FIRST_NOTE_DURATION, { sustain: true });
         }
 
+        // ---- start ----
+
+        const MAJOR_SHARPS = {
+            'Cb': -7, 'Gb': -6, 'Db': -5, 'Ab': -4, 'Eb': -3, 'Bb': -2, 'F': -1, 'C': 0,
+            'G': 1, 'D': 2, 'A': 3, 'E': 4, 'B': 5, 'F#': 6, 'C#': 7
+        };
+        const SHARP_ORDER = 'FCGDAEB';
+        const ABC_ACCIDENTAL = { '-2': '__', '-1': '_', '0': '=', '1': '^', '2': '^^' };
+
+        function keyLetter(abc) { return /^K:(.+)$/m.exec(abc)[1]; }
+
+        // letter -> alteration the key signature already gives it
+        function keyAlters(letter) {
+            const sharps = MAJOR_SHARPS[letter];
+            const alters = {};
+            const letters = sharps > 0 ? SHARP_ORDER.slice(0, sharps)
+                : SHARP_ORDER.split('').reverse().join('').slice(0, -sharps);
+            letters.split('').forEach(function (l) { alters[l] = Math.sign(sharps); });
+            return alters;
+        }
+
+        function parseName(name) {
+            const m = /^([A-G])(#{1,2}|b{1,2})?(-?\d)$/.exec(name);
+            const accidentals = m[2] || '';
+            return {
+                letter: m[1],
+                alter: accidentals.length * (accidentals[0] === 'b' ? -1 : 1),
+                octave: parseInt(m[3], 10)
+            };
+        }
+
+        // 'Bb4' -> 'B' - the staff position, with no accidental
+        function abcPitch(name) {
+            const p = parseName(name);
+            if (p.octave >= 5) return p.letter.toLowerCase() + "'".repeat(p.octave - 5);
+            return p.letter + ','.repeat(4 - p.octave);
+        }
+
+        // The accidental a struck note needs, as in print: one is in force
+        // from where it appears to the end of the bar. barAlters records it.
+        function abcAccidental(name, alters, barAlters) {
+            const p = parseName(name);
+            const slot = p.letter + p.octave;
+            const inForce = slot in barAlters ? barAlters[slot] : (alters[p.letter] || 0);
+            if (p.alter === inForce) return '';
+            barAlters[slot] = p.alter;
+            return ABC_ACCIDENTAL[p.alter];
+        }
+
+        // A length as written values abcjs can draw: 20 32nds -> [16, 4].
+        function writtenValues(quarters) {
+            let units = Math.round(quarters * CONFIG.UNITS_PER_QUARTER);
+            const out = [];
+            while (units > 0) {
+                const value = CONFIG.NOTE_VALUES.find(v => v <= units);
+                out.push(value);
+                units -= value;
+            }
+            return out;
+        }
+
+        // 'z' is a printed rest, 'x' blank space the same length.
+        function spacer(quarters, rest) {
+            return writtenValues(quarters).map(v => (rest ? 'z' : 'x') + v).join(' ');
+        }
+
+        // Only the first piece carries the accidental; the rest are tied to it.
+        function tiedNote(accidental, pitch, quarters, tiedOn) {
+            const values = writtenValues(quarters);
+            return values.map(function (v, i) {
+                return (i === 0 ? accidental : '') + pitch + v
+                    + (i < values.length - 1 || tiedOn ? '-' : '');
+            }).join(' ');
+        }
+
+        function meterAt(c, offset) {
+            let time = c.meters[0][1];
+            c.meters.forEach(function (change) { if (change[0] <= offset) time = change[1]; });
+            return time;
+        }
+
+        // The voice's bars from the phrase's first note to its last, blank
+        // except for the first `revealed` notes, each in its place. A gap is
+        // a printed rest once a revealed note follows it, blank space until then.
+        function startAbc(revealed) {
+            const c = current();
+            const soprano = el.voiceSelect.value === 'soprano';
+            const line = currentLine();
+            const names = currentNames();
+            const notes = line.slice(0, revealed).map(function (e, i) {
+                return { start: e[1], end: e[1] + e[2], name: names[i] };
+            });
+            const lineStart = line[0][1];
+            const lineEnd = Math.max.apply(null, line.map(e => e[1] + e[2]));
+            const lastShown = notes[notes.length - 1].start;
+            const signature = keyLetter(c.abc);
+            const alters = keyAlters(signature);
+
+            function gap(from, to) {
+                return spacer(to - from, from >= lineStart && to <= lastShown);
+            }
+
+            const bars = [];
+            let time = meterAt(c, lineStart);
+            for (let i = 0; i + 1 < c.bars.length; i++) {
+                const from = c.bars[i];
+                const to = c.bars[i + 1];
+                if (to <= lineStart || from >= lineEnd) continue;
+                const barTime = meterAt(c, from);
+                if (bars.length && barTime !== time) {
+                    bars[bars.length - 1] += ' [M:' + barTime + ']';
+                }
+                time = barTime;
+
+                const tokens = [];
+                const barAlters = {};
+                let at = from;
+                notes.forEach(function (n) {
+                    if (n.end <= from || n.start >= to) return;
+                    const s = Math.max(n.start, from);
+                    const e = Math.min(n.end, to);
+                    tokens.push(gap(at, s));
+                    // A note tied over from the last bar keeps its spelling
+                    // without restating the accidental.
+                    const accidental = n.start >= from ? abcAccidental(n.name, alters, barAlters) : '';
+                    tokens.push(tiedNote(accidental, abcPitch(n.name), e - s, n.end > to));
+                    at = e;
+                });
+                tokens.push(gap(at, to));
+                bars.push(tokens.filter(Boolean).join(' ') + ' |');
+            }
+
+            // Spread evenly, so a phrase never ends on a one-bar stub of a line.
+            const lineCount = Math.ceil(bars.length / CONFIG.START_MAX_BARS_PER_LINE);
+            const perLine = Math.ceil(bars.length / lineCount);
+            const lines = [];
+            for (let i = 0; i < bars.length; i += perLine) {
+                lines.push(bars.slice(i, i + perLine).join(' '));
+            }
+            return [
+                'X:1',
+                'M:' + meterAt(c, lineStart),
+                'L:1/32',
+                'K:' + signature + ' clef=' + (soprano ? 'treble' : 'bass')
+            ].concat(lines).join('\n');
+        }
+
+        function renderStart() {
+            const total = currentLine().length;
+            el.revealCount.textContent = session.revealed + ' / ' + total;
+            el.revealBtn.disabled = session.revealed >= total;
+            ABCJS.renderAbc(el.startNotation, startAbc(session.revealed), {
+                responsive: 'resize',
+                staffwidth: CONFIG.STAFF_WIDTH
+            });
+        }
+
+        function showStart() {
+            const voice = el.voiceSelect.value === 'soprano' ? 'soprano' : 'bass';
+            el.startTitle.textContent = 'Phrase ' + (parseInt(el.phraseSelect.value, 10) + 1)
+                + ' \u2014 ' + voice;
+            el.start.hidden = false;
+            session.revealed = 1;
+            renderStart();
+        }
+
+        function revealNext() {
+            if (el.start.hidden || session.revealed >= currentLine().length) return;
+            session.revealed++;
+            renderStart();
+        }
+
+        function hideStart() {
+            el.start.hidden = true;
+            el.startNotation.innerHTML = '';
+        }
+
         // ---- show ----
 
         function hideScore() {
@@ -295,6 +511,7 @@
         function load(r) {
             stop();
             hideScore();
+            hideStart();
             el.firstNote.textContent = '';
             session.r = r;
             el.rInput.value = r;
@@ -341,6 +558,7 @@
         function changeLine() {
             stop();
             hideScore();
+            hideStart();
             el.firstNote.textContent = '';
             ETUI.setText(el.status, 'Press Play.');
         }
@@ -349,6 +567,8 @@
 
         el.playBtn.addEventListener('click', play);
         el.firstBtn.addEventListener('click', firstNote);
+        el.startBtn.addEventListener('click', showStart);
+        el.revealBtn.addEventListener('click', revealNext);
         el.showBtn.addEventListener('click', toggleScore);
         el.randomBtn.addEventListener('click', loadRandom);
         el.rInput.addEventListener('change', loadTyped);
@@ -365,6 +585,8 @@
         ETUI.shortcuts({
             P: play,
             F: firstNote,
+            T: showStart,
+            R: revealNext,
             S: toggleScore,
             N: loadRandom
         });
