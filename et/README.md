@@ -28,3 +28,4 @@
 - <a href="https://broop.github.io/et/nachashim.html" target="_blank">Nachashim - Melodic Dictation</a>
 - <a href="https://broop.github.io/et/chorale_dictation.html" target="_blank">Chorale Dictation - Bach Melody &amp; Bass</a>
 - <a href="https://broop.github.io/et/palestrina_dict.html" target="_blank">Palestrina Dictation - Mass Voices</a>
+- <a href="https://broop.github.io/et/beethoven_dict.html" target="_blank">Beethoven Quartet Dictation</a>

@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Beethoven Quartet Dictation</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .movement-info {
+            margin: 10px 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .movement-info:empty { display: none; }
+
+        .score {
+            margin-top: 12px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+        }
+
+        .score[hidden] { display: none; }
+
+        .score-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .score-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .answer-voice {
+            fill: #2563eb;
+            stroke: #2563eb;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Beethoven Quartet Dictation</h1>
+
+    <div class="row">
+        <label>
+            Quartet
+            <select id="quartetSelect"></select>
+        </label>
+        <label>
+            Movement
+            <select id="movementSelect"></select>
+        </label>
+        <button id="randomBtn" style="align-self:end">Random <span class="shortcut">(N)</span></button>
+    </div>
+
+    <div class="row">
+        <label>
+            Instrument
+            <select id="voiceSelect">
+                <option value="0" selected>Violin I</option>
+                <option value="1">Violin II</option>
+                <option value="2">Viola</option>
+                <option value="3">Cello</option>
+            </select>
+        </label>
+        <label>
+            Phrase
+            <select id="phraseSelect"></select>
+        </label>
+        <label>
+            Tempo
+            <select id="tempoSelect">
+                <option value="40">Very slow (&#9833; = 40)</option>
+                <option value="60" selected>Slow (&#9833; = 60)</option>
+                <option value="80">Medium (&#9833; = 80)</option>
+                <option value="100">Moderate (&#9833; = 100)</option>
+            </select>
+        </label>
+    </div>
+
+    <div id="info" class="movement-info"></div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="firstBtn" disabled>First note <span class="shortcut">(F)</span></button>
+        <button id="startBtn">Start <span class="shortcut">(T)</span></button>
+        <button id="showBtn">Show <span class="shortcut">(S)</span></button>
+    </div>
+
+    <div id="firstNote" class="movement-info"></div>
+
+    <div id="start" class="score" hidden>
+        <div class="score-head">
+            <div id="startTitle" class="score-title"></div>
+            <button id="revealBtn">Reveal next <span class="shortcut">(R)</span>
+                <span id="revealCount" class="shortcut"></span></button>
+        </div>
+        <div id="startNotation"></div>
+    </div>
+
+    <div id="score" class="score" hidden>
+        <div id="scoreTitle" class="score-title"></div>
+        <div id="notation"></div>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>F</b>=First note, <b>T</b>=Start, <b>R</b>=Reveal next, <b>S</b>=Show,
+        <b>N</b>=Random movement.<br/>
+        Pick a quartet, movement and instrument. The instrument's line - the top note of a double stop,
+        the bottom one for the cello - is split into phrases where the corpus marks a phrase ending and at
+        the instrument's rests, with long stretches split after a long note. <b>Play</b> the phrase as
+        often as you like. <b>Start</b> sets out the phrase's bars with only its first note showing;
+        <b>Reveal next</b> adds one more note at a time. <b>Show</b> gives all four parts for the phrase's
+        bars, with the phrase you were writing in blue.<br/>
+        Scores and phrase annotations from the
+        <a href="https://github.com/DCMLab/ABC" target="_blank">Annotated Beethoven Corpus</a>
+        (DCML, EPFL), licensed
+        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a>.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-ui.js"></script>
+<script src="beethoven-index-data.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // palestrina_dict.html over the Beethoven quartets.
+        // src/export_beethoven.py writes beethoven-index-data.js and one
+        // beethoven-data/<quartet>/NN-data.js per movement, fetched the
+        // first time that movement is picked. A movement's parts arrive as
+        // tokens, a list per bar, and the ABC is written here: all of it
+        // for Show, with the unrevealed notes blanked for Start.
+        // ============================================================
+
+        const CONFIG = {
+            FIRST_NOTE_DURATION: 1.5,
+            ARTICULATION: 0.95,       // audible gap between repeated notes
+            STAFF_WIDTH: 860,
+            START_MAX_BARS_PER_LINE: 6,
+            SHOW_MAX_BARS_PER_LINE: 4,
+            UNITS_PER_QUARTER: 16,    // the ABC unit is a 64th, as in the exporter
+            // written lengths in 64ths, longest first: breve, dotted whole, ... 64th
+            NOTE_VALUES: [128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 1]
+        };
+
+        // ---- DOM ----
+
+        const el = {
+            quartetSelect: ETUI.$('quartetSelect'),
+            movementSelect: ETUI.$('movementSelect'),
+            voiceSelect: ETUI.$('voiceSelect'),
+            phraseSelect: ETUI.$('phraseSelect'),
+            tempoSelect: ETUI.$('tempoSelect'),
+            randomBtn: ETUI.$('randomBtn'),
+            info: ETUI.$('info'),
+            playBtn: ETUI.$('playBtn'),
+            firstBtn: ETUI.$('firstBtn'),
+            firstNote: ETUI.$('firstNote'),
+            startBtn: ETUI.$('startBtn'),
+            start: ETUI.$('start'),
+            startTitle: ETUI.$('startTitle'),
+            revealBtn: ETUI.$('revealBtn'),
+            revealCount: ETUI.$('revealCount'),
+            startNotation: ETUI.$('startNotation'),
+            showBtn: ETUI.$('showBtn'),
+            score: ETUI.$('score'),
+            scoreTitle: ETUI.$('scoreTitle'),
+            notation: ETUI.$('notation'),
+            status: ETUI.$('status')
+        };
+
+        const session = {
+            movement: null,   // e.g. 'n01op18-1_01'
+            timers: [],
+            revealed: 0,      // notes shown on the Start staff
+            request: 0        // guards against a slow load landing late
+        };
+
+        const QUARTETS = {};
+        const MOVEMENTS = {};
+        BEETHOVEN_INDEX.quartets.forEach(function (q) {
+            QUARTETS[q.id] = q;
+            q.movements.forEach(function (m) { MOVEMENTS[m.id] = m; });
+        });
+
+        function current() { return BEETHOVEN_MOVEMENTS[session.movement]; }
+        function voiceIndex() { return parseInt(el.voiceSelect.value, 10); }
+        function currentVoice() { return current().voices[voiceIndex()]; }
+
+        // [start, end, firstName]
+        function currentPhrase() {
+            return currentVoice().phrases[parseInt(el.phraseSelect.value, 10)];
+        }
+
+        function inPhrase(onset) {
+            const phrase = currentPhrase();
+            return onset >= phrase[0] && onset < phrase[1];
+        }
+
+        // [midi, onset, length] for the phrase's notes
+        function currentLine() {
+            return currentVoice().line.filter(e => inPhrase(e[1]));
+        }
+
+        function addOption(select, value, text) {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = text;
+            select.appendChild(opt);
+        }
+
+        // ---- loading a movement ----
+
+        // Each movement file adds itself to window.BEETHOVEN_MOVEMENTS.
+        window.BEETHOVEN_MOVEMENTS = window.BEETHOVEN_MOVEMENTS || {};
+
+        function fetchMovement(id) {
+            if (BEETHOVEN_MOVEMENTS[id]) return Promise.resolve();
+            return new Promise(function (resolve, reject) {
+                const script = document.createElement('script');
+                script.src = MOVEMENTS[id].file;
+                script.onload = resolve;
+                script.onerror = function () { reject(new Error('could not load ' + MOVEMENTS[id].file)); };
+                document.head.appendChild(script);
+            });
+        }
+
+        // ---- playback ----
+
+        function stop() {
+            session.timers.forEach(clearTimeout);
+            session.timers = [];
+            TiulPiano.stopAll();
+        }
+
+        function play() {
+            if (!TiulPiano.isReady() || session.movement === null) return;
+            stop();
+
+            const line = currentLine();
+            const secPerQuarter = 60 / parseInt(el.tempoSelect.value, 10);
+            const start = line[0][1];
+            let end = 0;
+
+            line.forEach(function (event) {
+                const midi = event[0];
+                const at = (event[1] - start) * secPerQuarter;
+                const length = event[2] * secPerQuarter;
+                session.timers.push(setTimeout(function () {
+                    TiulPiano.play(midi, length * CONFIG.ARTICULATION, { sustain: true });
+                }, at * 1000));
+                end = at + length;
+            });
+
+            ETUI.setText(el.status, 'Playing...');
+            session.timers.push(setTimeout(function () {
+                ETUI.setText(el.status, 'Finished. Play again, or Show.');
+            }, end * 1000));
+        }
+
+        function firstNote() {
+            if (!TiulPiano.isReady() || session.movement === null) return;
+            stop();
+            el.firstNote.textContent = 'First note: ' + currentPhrase()[2];
+            TiulPiano.play(currentLine()[0][0], CONFIG.FIRST_NOTE_DURATION, { sustain: true });
+        }
+
+        // ---- writing ABC from tokens ----
+        //
+        // ['n', strike, units, names, flags, tuplet, grace]  note or chord
+        // ['r', strike, units, tuplet]                       rest
+        // ['c', clef]                                        clef change
+        // ['&']                                              second voice follows
+
+        const KEY_NAMES = {
+            '-7': 'Cb', '-6': 'Gb', '-5': 'Db', '-4': 'Ab', '-3': 'Eb', '-2': 'Bb', '-1': 'F',
+            '0': 'C', '1': 'G', '2': 'D', '3': 'A', '4': 'E', '5': 'B', '6': 'F#', '7': 'C#'
+        };
+        const SHARP_ORDER = 'FCGDAEB';
+        const ABC_ACCIDENTAL = { '-2': '__', '-1': '_', '0': '=', '1': '^', '2': '^^' };
+
+        function atOffset(changes, offset) {
+            let value = changes[0][1];
+            changes.forEach(function (change) { if (change[0] <= offset) value = change[1]; });
+            return value;
+        }
+
+        // letter -> alteration the key signature already gives it
+        function keyAlters(sharps) {
+            const alters = {};
+            const letters = sharps > 0 ? SHARP_ORDER.slice(0, sharps)
+                : SHARP_ORDER.split('').reverse().join('').slice(0, -sharps);
+            letters.split('').forEach(function (l) { alters[l] = Math.sign(sharps); });
+            return alters;
+        }
+
+        function parseName(name) {
+            const m = /^([A-G])(#{1,2}|b{1,2})?(-?\d)$/.exec(name);
+            const accidentals = m[2] || '';
+            return {
+                letter: m[1],
+                alter: accidentals.length * (accidentals[0] === 'b' ? -1 : 1),
+                octave: parseInt(m[3], 10)
+            };
+        }
+
+        // 'Bb4' -> 'B' - the staff position, with no accidental
+        function abcPitch(name) {
+            const p = parseName(name);
+            if (p.octave >= 5) return p.letter.toLowerCase() + "'".repeat(p.octave - 5);
+            return p.letter + ','.repeat(4 - p.octave);
+        }
+
+        // The accidental a struck note needs, as in print: one is in force
+        // from where it appears to the end of the bar. barAlters records it.
+        function abcAccidental(name, alters, barAlters) {
+            const p = parseName(name);
+            const slot = p.letter + p.octave;
+            const inForce = slot in barAlters ? barAlters[slot] : (alters[p.letter] || 0);
+            if (p.alter === inForce) return '';
+            barAlters[slot] = p.alter;
+            return ABC_ACCIDENTAL[p.alter];
+        }
+
+        // Where beams break: the beat, or the dotted beat in compound time.
+        function beatUnits(time) {
+            const parts = time.split('/').map(Number);
+            const unit = 4 * CONFIG.UNITS_PER_QUARTER / parts[1];
+            return parts[1] === 8 && parts[0] % 3 === 0 && parts[0] > 3 ? 3 * unit : unit;
+        }
+
+        function noteText(t, alters, barAlters) {
+            const flags = t[4] || 0;
+            // A note tied on from earlier keeps its spelling without
+            // restating the accidental, and sets none for the bar.
+            const pitches = t[3].split(' ').map(function (name) {
+                return (flags & 2 ? '' : abcAccidental(name, alters, barAlters)) + abcPitch(name);
+            });
+            let text = (pitches.length > 1 ? '[' + pitches.join('') + ']' : pitches[0]) + t[2];
+            if (flags & 1) text += '-';
+            // Grace notes state their own accidentals but set none for the
+            // bar, so the note after them restates its own, as printed parts do.
+            if (t[6]) {
+                const graceAlters = Object.assign({}, barAlters);
+                text = '{' + t[6].split(' ').map(function (g) {
+                    return abcAccidental(g, alters, graceAlters) + abcPitch(g);
+                }).join('') + '}' + text;
+            }
+            return text;
+        }
+
+        // Blank space as written values abcjs can draw: 40 64ths -> x32 x8.
+        function blank(units) {
+            const out = [];
+            while (units > 0) {
+                const value = CONFIG.NOTE_VALUES.find(v => v <= units);
+                out.push('x' + value);
+                units -= value;
+            }
+            return out.join(' ');
+        }
+
+        function onBeat(pos, beat) {
+            return Math.abs(pos / beat - Math.round(pos / beat)) < 1e-6;
+        }
+
+        function tupletOf(t) { return t[0] === 'n' ? t[5] : t[0] === 'r' ? t[3] : ''; }
+
+        // One bar of one part. shown(t) says whether a note or rest token is
+        // drawn; hidden ones become blank space of the same length. abcjs
+        // cannot draw a tuplet that starts on blank space, so a tuplet that
+        // is wholly hidden becomes one blank of its total length, and one
+        // with hidden notes before visible ones shows those notes too.
+        // Returns the text, any clefs changed to before the first note, and the
+        // drawn note tokens in the order abcjs numbers them, per voice.
+        function barText(c, voice, i, shown, state) {
+            const tokens = voice.bars[i];
+            const alters = keyAlters(atOffset(c.keys, c.bars[i]));
+            const beat = beatUnits(atOffset(c.meters, c.bars[i]));
+            const barAlters = {};
+            const visible = tokens.map(t => t[0] === 'n' || t[0] === 'r' ? shown(t) : true);
+            const lead = [];
+            const out = [];
+            const notes = [[]];
+            let overlay = 0;
+            let started = false;
+            let pos = 0;
+            let tupletLeft = 0;
+            let tupletScale = 1;
+
+            function place(text, units) {
+                if (out.length && onBeat(pos, beat) && out[out.length - 1] !== ' & ') out.push(' ');
+                out.push(text);
+                pos += units;
+            }
+
+            for (let j = 0; j < tokens.length; j++) {
+                const t = tokens[j];
+                if (t[0] === 'c') {
+                    state.clef = t[1];
+                    if (started) out.push(' [K:clef=' + t[1] + '] ');
+                    else lead.push(t[1]);
+                    continue;
+                }
+                if (t[0] === '&') {
+                    out.push(' & ');
+                    overlay++;
+                    notes[overlay] = [];
+                    pos = 0;
+                    continue;
+                }
+                started = true;
+
+                let prefix = '';
+                const tuplet = tupletOf(t);
+                if (tuplet) {
+                    const [p, q, r] = tuplet.split(':').map(Number);
+                    const members = [];
+                    for (let k = j; k < tokens.length && members.length < r; k++) {
+                        if (tokens[k][0] === 'n' || tokens[k][0] === 'r') members.push(k);
+                    }
+                    if (!members.some(k => visible[k])) {
+                        const units = members.reduce((s, k) => s + tokens[k][2], 0) * q / p;
+                        if (Number.isInteger(units)) {
+                            place(blank(units), units);
+                            j = members[members.length - 1];
+                            continue;
+                        }
+                    }
+                    for (const k of members) {
+                        if (visible[k]) break;
+                        visible[k] = true;
+                    }
+                    prefix = '(' + tuplet;
+                    tupletLeft = r;
+                    tupletScale = q / p;
+                }
+
+                const scale = tupletLeft > 0 ? tupletScale : 1;
+                if (tupletLeft > 0) tupletLeft--;
+                const units = t[2] * scale;
+                if (!visible[j]) {
+                    place(prefix + 'x' + t[2], units);
+                } else if (t[0] === 'r') {
+                    place(prefix + 'z' + t[2], units);
+                } else {
+                    place(prefix + noteText(t, alters, barAlters), units);
+                    notes[overlay].push(t);
+                }
+            }
+            return { text: out.join(''), lead: lead, notes: notes };
+        }
+
+        function clefBefore(voice, barIndex) {
+            let clef = voice.clef;
+            for (let i = 0; i < barIndex; i++) {
+                voice.bars[i].forEach(function (t) { if (t[0] === 'c') clef = t[1]; });
+            }
+            return clef;
+        }
+
+        // ABC for the given parts over bars from..to. shownFor(v) gives the
+        // shown() test for part v. abcjs is particular about changes at a
+        // barline: a meter change only takes hold as its own M: line, so a
+        // system starts at each one; a clef change at the start of a system
+        // must be a V: line (one hung off the bar before is ignored), and a
+        // key change there hangs off the bar before. Inside a system, key and
+        // clef changes go at the start of their bar.
+        function writeScore(c, parts, from, to, shownFor, maxPerLine) {
+            const multi = parts.length > 1;
+            const texts = {};    // part -> text of each bar
+            const leads = {};    // part -> clef changed to at each bar's start, or ''
+            const clefsIn = {};  // part -> clef in force entering each bar
+            const notes = {};
+            parts.forEach(function (v) {
+                const voice = c.voices[v];
+                const state = { clef: clefBefore(voice, from) };
+                texts[v] = [];
+                leads[v] = [];
+                clefsIn[v] = [];
+                notes[v] = [];
+                for (let i = from; i <= to; i++) {
+                    clefsIn[v].push(state.clef);
+                    const bar = barText(c, voice, i, shownFor(v), state);
+                    bar.notes.forEach(function (list, k) {
+                        notes[v][k] = (notes[v][k] || []).concat(list);
+                    });
+                    let before = c.barStyles[i][0];
+                    if (i > from) {
+                        // A start-repeat replaces the barline before it - '::'
+                        // after an end-repeat, '|:' after any other - rather
+                        // than standing as a bar of its own.
+                        const prev = texts[v].length - 1;
+                        if (before.startsWith('|:')) {
+                            const after = c.barStyles[i - 1][1];
+                            texts[v][prev] = texts[v][prev].slice(0, -after.length)
+                                + (after === ':|' ? '::' : '|:');
+                            before = before.slice(2);
+                        }
+                        // An ending's number belongs on the barline that opens
+                        // it ('|[2', ':|[2'); set apart, abcjs reads it as a
+                        // barline of its own and an empty bar between.
+                        const ending = /^\[(\d+) /.exec(before);
+                        if (ending) {
+                            texts[v][prev] += '[' + ending[1];
+                            before = before.slice(ending[0].length);
+                        }
+                    }
+                    leads[v].push(bar.lead.length ? bar.lead[bar.lead.length - 1] : '');
+                    texts[v].push(before + bar.text + ' ' + c.barStyles[i][1]);
+                }
+            });
+
+            const meterAt = i => atOffset(c.meters, c.bars[i]);
+            const keyAt = i => atOffset(c.keys, c.bars[i]);
+            const leadAt = (v, i) => leads[v][i - from];
+            // abcjs starts every system in the part's declared clef, ignoring
+            // changes made inside the system before, so each system restates it.
+            const clefAt = (v, i) => leadAt(v, i) || clefsIn[v][i - from];
+
+            // Systems: a new one at every meter change, and the bars between
+            // spread evenly so none ends on a stub.
+            const starts = [];
+            let segment = from;
+            for (let i = from + 1; i <= to + 1; i++) {
+                if (i === to + 1 || meterAt(i) !== meterAt(i - 1)) {
+                    const count = i - segment;
+                    const systems = Math.ceil(count / maxPerLine);
+                    for (let s = 0; s < systems; s++) starts.push(segment + Math.floor(s * count / systems));
+                    segment = i;
+                }
+            }
+            starts.push(to + 1);
+
+            const header = ['X:1', 'M:' + meterAt(from), 'L:1/64'];
+            const firstClef = v => clefAt(v, from);
+            if (multi) {
+                header.push('%%score [' + parts.map(v => 'V' + v).join(' ') + ']');
+                parts.forEach(v => header.push('V:V' + v + ' clef=' + firstClef(v)));
+                header.push('K:' + KEY_NAMES[keyAt(from)]);
+            } else {
+                header.push('K:' + KEY_NAMES[keyAt(from)] + ' clef=' + firstClef(parts[0]));
+            }
+
+            const lines = [];
+            for (let s = 0; s + 1 < starts.length; s++) {
+                const a = starts[s];
+                const b = starts[s + 1];
+                if (s > 0) {
+                    if (meterAt(a) !== meterAt(a - 1)) lines.push('M:' + meterAt(a));
+                    if (multi) parts.forEach(v => lines.push('V:V' + v + ' clef=' + clefAt(v, a)));
+                }
+                parts.forEach(function (v) {
+                    const bars = [];
+                    for (let i = a; i < b; i++) {
+                        const pre = [];
+                        if (i > a && keyAt(i) !== keyAt(i - 1)) pre.push('[K:' + KEY_NAMES[keyAt(i)] + ']');
+                        if (i > a && leadAt(v, i)) pre.push('[K:clef=' + leadAt(v, i) + ']');
+                        if (i === a && s > 0 && !multi) pre.push('[K:clef=' + clefAt(v, i) + ']');
+                        bars.push(pre.concat(texts[v][i - from]).join(' '));
+                    }
+                    if (b <= to && keyAt(b) !== keyAt(b - 1)) {
+                        bars[bars.length - 1] += ' [K:' + KEY_NAMES[keyAt(b)] + ']';
+                    }
+                    lines.push(multi ? '[V:V' + v + '] ' + bars.join(' ') : bars.join(' '));
+                });
+            }
+            return { abc: header.concat(lines).join('\n'), notes: notes };
+        }
+
+        function barOf(c, offset) {
+            let i = 0;
+            while (i + 2 < c.bars.length && c.bars[i + 1] <= offset) i++;
+            return i;
+        }
+
+        // The bars the phrase's notes sound in.
+        function phraseBars(c, line) {
+            const last = line[line.length - 1];
+            return [barOf(c, line[0][1]), barOf(c, last[1] + last[2] - 1e-6)];
+        }
+
+        // ---- start ----
+
+        // The voice's bars for the phrase, blank but for the first `revealed`
+        // notes. A rest is printed once a revealed note follows it.
+        function startAbc(revealed) {
+            const c = current();
+            const line = currentLine();
+            const phrase = currentPhrase();
+            const lastShown = line[revealed - 1][1];
+            const [from, to] = phraseBars(c, line);
+            function shown(t) {
+                if (t[0] === 'r') return t[1] >= phrase[0] && t[1] < lastShown;
+                return t[1] >= phrase[0] && t[1] <= lastShown;
+            }
+            return writeScore(c, [voiceIndex()], from, to, () => shown,
+                CONFIG.START_MAX_BARS_PER_LINE).abc;
+        }
+
+        function renderStart() {
+            const total = currentLine().length;
+            el.revealCount.textContent = session.revealed + ' / ' + total;
+            el.revealBtn.disabled = session.revealed >= total;
+            ABCJS.renderAbc(el.startNotation, startAbc(session.revealed), {
+                responsive: 'resize',
+                staffwidth: CONFIG.STAFF_WIDTH
+            });
+        }
+
+        function showStart() {
+            if (session.movement === null) return;
+            el.startTitle.textContent = 'Phrase ' + (parseInt(el.phraseSelect.value, 10) + 1)
+                + ' — ' + currentVoice().name;
+            el.start.hidden = false;
+            session.revealed = 1;
+            renderStart();
+        }
+
+        function revealNext() {
+            if (el.start.hidden || session.revealed >= currentLine().length) return;
+            session.revealed++;
+            renderStart();
+        }
+
+        function hideStart() {
+            el.start.hidden = true;
+            el.startNotation.innerHTML = '';
+        }
+
+        // ---- show ----
+
+        function hideScore() {
+            el.score.hidden = true;
+            el.notation.innerHTML = '';
+            el.showBtn.firstChild.textContent = 'Show ';
+        }
+
+        // All four parts over the phrase's bars, the phrase itself in blue.
+        // abcjs numbers its voices across overlays too, so notes are matched
+        // to tokens through the rendered tune's staves rather than classes.
+        function showScore() {
+            if (session.movement === null) return;
+            const c = current();
+            const v = voiceIndex();
+            const [from, to] = phraseBars(c, currentLine());
+            const parts = [0, 1, 2, 3];
+            const written = writeScore(c, parts, from, to, () => () => true,
+                CONFIG.SHOW_MAX_BARS_PER_LINE);
+            el.scoreTitle.textContent = MOVEMENTS[session.movement].title + ' — bars '
+                + (from + 1) + '–' + (to + 1);
+            el.score.hidden = false;
+            el.showBtn.firstChild.textContent = 'Hide ';
+
+            const tune = ABCJS.renderAbc(el.notation, written.abc, {
+                responsive: 'resize',
+                staffwidth: CONFIG.STAFF_WIDTH
+            })[0];
+
+            const cursor = [];
+            tune.lines.forEach(function (line) {
+                if (!line.staff || !line.staff[v]) return;
+                line.staff[v].voices.forEach(function (elements, k) {
+                    const list = written.notes[v][k] || [];
+                    elements.filter(e => e.el_type === 'note' && !e.rest).forEach(function (e) {
+                        const n = cursor[k] || 0;
+                        cursor[k] = n + 1;
+                        const t = list[n];
+                        if (t && inPhrase(t[1]) && e.abselem) {
+                            e.abselem.elemset.forEach(node => node.classList.add('answer-voice'));
+                        }
+                    });
+                });
+            });
+        }
+
+        function toggleScore() {
+            if (el.score.hidden) showScore();
+            else hideScore();
+        }
+
+        // ---- choosing ----
+
+        function clearOutput() {
+            stop();
+            hideScore();
+            hideStart();
+            el.firstNote.textContent = '';
+        }
+
+        function renderQuartets() {
+            BEETHOVEN_INDEX.quartets.forEach(function (q) { addOption(el.quartetSelect, q.id, q.title); });
+        }
+
+        function renderMovements(quartetId) {
+            el.movementSelect.innerHTML = '';
+            QUARTETS[quartetId].movements.forEach(function (m) {
+                addOption(el.movementSelect, m.id, m.number + '. ' + m.title);
+            });
+        }
+
+        function renderPhrases() {
+            const phrases = currentVoice().phrases;
+            el.phraseSelect.innerHTML = '';
+            phrases.forEach(function (p, i) {
+                addOption(el.phraseSelect, i, (i + 1) + ' of ' + phrases.length);
+            });
+        }
+
+        function quartetOf(movementId) { return movementId.split('_')[0]; }
+
+        function load(movementId) {
+            clearOutput();
+            const request = ++session.request;
+            const quartet = quartetOf(movementId);
+            if (el.quartetSelect.value !== quartet || !el.movementSelect.options.length) {
+                el.quartetSelect.value = quartet;
+                renderMovements(quartet);
+            }
+            el.movementSelect.value = movementId;
+            ETUI.setText(el.status, 'Loading ' + MOVEMENTS[movementId].title + '...');
+
+            fetchMovement(movementId).then(function () {
+                if (request !== session.request) return;   // a later choice won
+                session.movement = movementId;
+                renderPhrases();
+                const m = MOVEMENTS[movementId];
+                el.info.textContent = m.number + '. ' + m.title + ' · ' + m.time
+                    + ' · ' + m.bars + ' bars';
+                ETUI.setText(el.status, TiulPiano.isReady() ? 'Press Play.' : 'Loading piano samples...');
+            }).catch(function (e) {
+                ETUI.setText(el.status, 'Error: ' + e.message);
+            });
+        }
+
+        function loadRandom() {
+            const quartets = BEETHOVEN_INDEX.quartets;
+            const q = quartets[Math.floor(Math.random() * quartets.length)];
+            load(q.movements[Math.floor(Math.random() * q.movements.length)].id);
+        }
+
+        // The score stays hidden so a shown phrase can't give away the next one.
+        function changeLine() {
+            clearOutput();
+            ETUI.setText(el.status, 'Press Play.');
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', play);
+        el.firstBtn.addEventListener('click', firstNote);
+        el.startBtn.addEventListener('click', showStart);
+        el.revealBtn.addEventListener('click', revealNext);
+        el.showBtn.addEventListener('click', toggleScore);
+        el.randomBtn.addEventListener('click', loadRandom);
+        el.quartetSelect.addEventListener('change', function () {
+            renderMovements(el.quartetSelect.value);
+            load(el.movementSelect.value);
+        });
+        el.movementSelect.addEventListener('change', function () { load(el.movementSelect.value); });
+        el.voiceSelect.addEventListener('change', function () {
+            if (session.movement === null) return;
+            renderPhrases();
+            changeLine();
+        });
+        el.phraseSelect.addEventListener('change', changeLine);
+        el.tempoSelect.addEventListener('change', stop);
+
+        ETUI.shortcuts({
+            P: play,
+            F: firstNote,
+            T: showStart,
+            R: revealNext,
+            S: toggleScore,
+            N: loadRandom
+        });
+
+        renderQuartets();
+        load(BEETHOVEN_INDEX.quartets[0].movements[0].id);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn, el.firstBtn],
+            keyboard: 'keyboard',
+            range: BEETHOVEN_INDEX.range,
+            readyMessage: 'Ready! Press Play.'
+        });
+    })();
+</script>
+</body>
+</html>
