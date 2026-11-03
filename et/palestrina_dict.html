@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Palestrina Dictation</title>
+    <link rel="stylesheet" href="et-style.css"/>
+    <style>
+        .section-info {
+            margin: 10px 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .section-info:empty { display: none; }
+
+        .score {
+            margin-top: 12px;
+            padding: 12px 14px;
+            background: #f8f9fb;
+            border-radius: 10px;
+        }
+
+        .score[hidden] { display: none; }
+
+        .score-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .score-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .answer-voice {
+            fill: #2563eb;
+            stroke: #2563eb;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Palestrina Dictation</h1>
+
+    <div class="row">
+        <label>
+            Mass
+            <select id="massSelect"></select>
+        </label>
+        <label>
+            Section
+            <select id="sectionSelect"></select>
+        </label>
+        <button id="randomBtn" style="align-self:end">Random <span class="shortcut">(N)</span></button>
+    </div>
+
+    <div class="row">
+        <label>
+            Voice
+            <select id="voiceSelect"></select>
+        </label>
+        <label>
+            Phrase
+            <select id="phraseSelect"></select>
+        </label>
+        <label>
+            Tempo
+            <select id="tempoSelect">
+                <option value="30">Very slow (half note = 30)</option>
+                <option value="40" selected>Slow (half note = 40)</option>
+                <option value="54">Medium (half note = 54)</option>
+            </select>
+        </label>
+    </div>
+
+    <div id="info" class="section-info"></div>
+
+    <div class="row">
+        <button id="playBtn" class="play-btn" disabled>Play <span class="shortcut">(P)</span></button>
+        <button id="firstBtn" disabled>First note <span class="shortcut">(F)</span></button>
+        <button id="startBtn">Start <span class="shortcut">(T)</span></button>
+        <button id="showBtn">Show <span class="shortcut">(S)</span></button>
+    </div>
+
+    <div id="firstNote" class="section-info"></div>
+
+    <div id="start" class="score" hidden>
+        <div class="score-head">
+            <div id="startTitle" class="score-title"></div>
+            <button id="revealBtn">Reveal next <span class="shortcut">(R)</span>
+                <span id="revealCount" class="shortcut"></span></button>
+        </div>
+        <div id="startNotation"></div>
+    </div>
+
+    <div id="score" class="score" hidden>
+        <div id="scoreTitle" class="score-title"></div>
+        <div id="notation"></div>
+    </div>
+
+    <div id="status" class="status">Loading piano samples...</div>
+
+    <div class="hint">
+        Shortcuts: <b>P</b>=Play, <b>F</b>=First note, <b>T</b>=Start, <b>R</b>=Reveal next, <b>S</b>=Show,
+        <b>N</b>=Random section.<br/>
+        Sections of Palestrina's Masses, from the music21 corpus. Pick any voice; its line is split into
+        phrases at its rests, with very long stretches split after a long note. <b>Play</b> the phrase as
+        often as you like. <b>Start</b> sets out the phrase's bars on a staff with only its first note
+        filled in; <b>Reveal next</b> adds one more note at a time, to check your dictation as you go.
+        <b>Show</b> gives the whole section, with the phrase you were writing in blue.
+    </div>
+
+    <div class="keyboard-label">Piano Keyboard (click or use keys A-L and W-P)</div>
+    <div id="keyboard"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qwerty-hancock@0.10.0/dist/qwerty-hancock.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js"></script>
+<script src="tiul-piano.js"></script>
+<script src="et-ui.js"></script>
+<script src="palestrina-index-data.js"></script>
+<script>
+    (function () {
+        // ============================================================
+        // chorale_dictation.html over the Palestrina Masses.
+        // src/export_palestrina.py writes palestrina-index-data.js, which
+        // lists every Mass and section, and one palestrina-data/NNN-data.js
+        // per Mass, fetched here the first time that Mass is picked.
+        // ============================================================
+
+        const CONFIG = {
+            FIRST_NOTE_DURATION: 1.5,
+            ARTICULATION: 0.95,       // audible gap between repeated notes
+            STAFF_WIDTH: 860,
+            START_MAX_BARS_PER_LINE: 6,
+            UNITS_PER_QUARTER: 8,     // the ABC unit is a 32nd, as in the exporter
+            // written lengths in 32nds, longest first: long, dotted breve, breve,
+            // dotted whole, whole, ... 32nd
+            NOTE_VALUES: [128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 1]
+        };
+
+        // ---- DOM ----
+
+        const el = {
+            massSelect: ETUI.$('massSelect'),
+            sectionSelect: ETUI.$('sectionSelect'),
+            voiceSelect: ETUI.$('voiceSelect'),
+            phraseSelect: ETUI.$('phraseSelect'),
+            tempoSelect: ETUI.$('tempoSelect'),
+            randomBtn: ETUI.$('randomBtn'),
+            info: ETUI.$('info'),
+            playBtn: ETUI.$('playBtn'),
+            firstBtn: ETUI.$('firstBtn'),
+            firstNote: ETUI.$('firstNote'),
+            startBtn: ETUI.$('startBtn'),
+            start: ETUI.$('start'),
+            startTitle: ETUI.$('startTitle'),
+            revealBtn: ETUI.$('revealBtn'),
+            revealCount: ETUI.$('revealCount'),
+            startNotation: ETUI.$('startNotation'),
+            showBtn: ETUI.$('showBtn'),
+            score: ETUI.$('score'),
+            scoreTitle: ETUI.$('scoreTitle'),
+            notation: ETUI.$('notation'),
+            status: ETUI.$('status')
+        };
+
+        const session = {
+            mass: null,       // id from the index
+            section: null,    // index into that Mass's sections
+            timers: [],
+            revealed: 0,      // notes shown on the Start staff
+            request: 0        // guards against a slow Mass load landing late
+        };
+
+        const MASSES = {};
+        PALESTRINA_INDEX.masses.forEach(function (m) { MASSES[m.id] = m; });
+
+        function current() { return PALESTRINA_MASSES[session.mass].sections[session.section]; }
+        function currentVoice() { return current().voices[parseInt(el.voiceSelect.value, 10)]; }
+
+        // [start, end, firstWritten, writtenCount, firstName]
+        function currentPhrase() {
+            return currentVoice().phrases[parseInt(el.phraseSelect.value, 10)];
+        }
+
+        function inPhrase(event) {
+            const phrase = currentPhrase();
+            return event[1] >= phrase[0] && event[1] < phrase[1];
+        }
+
+        function currentLine() {
+            return currentVoice().line.filter(inPhrase);
+        }
+
+        // The line's notes spelled, e.g. 'Bb4', in step with currentLine().
+        function currentNames() {
+            const voice = currentVoice();
+            return voice.names.split(' ').filter(function (name, i) {
+                return inPhrase(voice.line[i]);
+            });
+        }
+
+        function addOption(select, value, text) {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = text;
+            select.appendChild(opt);
+        }
+
+        // ---- loading a Mass ----
+
+        // Each Mass file adds itself to window.PALESTRINA_MASSES.
+        window.PALESTRINA_MASSES = window.PALESTRINA_MASSES || {};
+
+        function fetchMass(id) {
+            if (PALESTRINA_MASSES[id]) return Promise.resolve();
+            return new Promise(function (resolve, reject) {
+                const script = document.createElement('script');
+                script.src = MASSES[id].file;
+                script.onload = resolve;
+                script.onerror = function () { reject(new Error('could not load ' + MASSES[id].file)); };
+                document.head.appendChild(script);
+            });
+        }
+
+        // ---- playback ----
+
+        function stop() {
+            session.timers.forEach(clearTimeout);
+            session.timers = [];
+            TiulPiano.stopAll();
+        }
+
+        // Starts on the phrase's first note; tempo is counted in half notes.
+        function play() {
+            if (!TiulPiano.isReady() || session.mass === null) return;
+            stop();
+
+            const line = currentLine();
+            const secPerQuarter = 30 / parseInt(el.tempoSelect.value, 10);
+            const start = line[0][1];
+            let end = 0;
+
+            line.forEach(function (event) {
+                const midi = event[0];
+                const at = (event[1] - start) * secPerQuarter;
+                const length = event[2] * secPerQuarter;
+                session.timers.push(setTimeout(function () {
+                    TiulPiano.play(midi, length * CONFIG.ARTICULATION, { sustain: true });
+                }, at * 1000));
+                end = at + length;
+            });
+
+            ETUI.setText(el.status, 'Playing...');
+            session.timers.push(setTimeout(function () {
+                ETUI.setText(el.status, 'Finished. Play again, or Show.');
+            }, end * 1000));
+        }
+
+        function firstNote() {
+            if (!TiulPiano.isReady() || session.mass === null) return;
+            stop();
+            el.firstNote.textContent = 'First note: ' + currentPhrase()[4];
+            TiulPiano.play(currentLine()[0][0], CONFIG.FIRST_NOTE_DURATION, { sustain: true });
+        }
+
+        // ---- start ----
+
+        const MAJOR_SHARPS = {
+            'Cb': -7, 'Gb': -6, 'Db': -5, 'Ab': -4, 'Eb': -3, 'Bb': -2, 'F': -1, 'C': 0,
+            'G': 1, 'D': 2, 'A': 3, 'E': 4, 'B': 5, 'F#': 6, 'C#': 7
+        };
+        const SHARP_ORDER = 'FCGDAEB';
+        const ABC_ACCIDENTAL = { '-2': '__', '-1': '_', '0': '=', '1': '^', '2': '^^' };
+
+        function keyLetter(abc) { return /^K:(.+)$/m.exec(abc)[1]; }
+
+        // letter -> alteration the key signature already gives it
+        function keyAlters(letter) {
+            const sharps = MAJOR_SHARPS[letter];
+            const alters = {};
+            const letters = sharps > 0 ? SHARP_ORDER.slice(0, sharps)
+                : SHARP_ORDER.split('').reverse().join('').slice(0, -sharps);
+            letters.split('').forEach(function (l) { alters[l] = Math.sign(sharps); });
+            return alters;
+        }
+
+        function parseName(name) {
+            const m = /^([A-G])(#{1,2}|b{1,2})?(-?\d)$/.exec(name);
+            const accidentals = m[2] || '';
+            return {
+                letter: m[1],
+                alter: accidentals.length * (accidentals[0] === 'b' ? -1 : 1),
+                octave: parseInt(m[3], 10)
+            };
+        }
+
+        // 'Bb4' -> 'B' - the staff position, with no accidental. abcjs draws a
+        // treble-8 clef's notes as plain treble, so those are written an
+        // octave up, as the exporter does for the full score.
+        function abcPitch(name, clef) {
+            const p = parseName(name);
+            const octave = p.octave + (clef === 'treble-8' ? 1 : 0);
+            if (octave >= 5) return p.letter.toLowerCase() + "'".repeat(octave - 5);
+            return p.letter + ','.repeat(4 - octave);
+        }
+
+        // The accidental a struck note needs, as in print: one is in force
+        // from where it appears to the end of the bar. barAlters records it.
+        function abcAccidental(name, alters, barAlters) {
+            const p = parseName(name);
+            const slot = p.letter + p.octave;
+            const inForce = slot in barAlters ? barAlters[slot] : (alters[p.letter] || 0);
+            if (p.alter === inForce) return '';
+            barAlters[slot] = p.alter;
+            return ABC_ACCIDENTAL[p.alter];
+        }
+
+        // A length as written values abcjs can draw: 20 32nds -> [16, 4].
+        function writtenValues(quarters) {
+            let units = Math.round(quarters * CONFIG.UNITS_PER_QUARTER);
+            const out = [];
+            while (units > 0) {
+                const value = CONFIG.NOTE_VALUES.find(v => v <= units);
+                out.push(value);
+                units -= value;
+            }
+            return out;
+        }
+
+        // 'z' is a printed rest, 'x' blank space the same length.
+        function spacer(quarters, rest) {
+            return writtenValues(quarters).map(v => (rest ? 'z' : 'x') + v).join(' ');
+        }
+
+        // Only the first piece carries the accidental; the rest are tied to it.
+        function tiedNote(accidental, pitch, quarters, tiedOn) {
+            const values = writtenValues(quarters);
+            return values.map(function (v, i) {
+                return (i === 0 ? accidental : '') + pitch + v
+                    + (i < values.length - 1 || tiedOn ? '-' : '');
+            }).join(' ');
+        }
+
+        function meterAt(c, offset) {
+            let time = c.meters[0][1];
+            c.meters.forEach(function (change) { if (change[0] <= offset) time = change[1]; });
+            return time;
+        }
+
+        // The voice's bars from the phrase's first note to its last, blank
+        // except for the first `revealed` notes, each in its place. A gap is
+        // a printed rest once a revealed note follows it, blank space until then.
+        function startAbc(revealed) {
+            const c = current();
+            const line = currentLine();
+            const names = currentNames();
+            const notes = line.slice(0, revealed).map(function (e, i) {
+                return { start: e[1], end: e[1] + e[2], name: names[i] };
+            });
+            const lineStart = line[0][1];
+            const lineEnd = Math.max.apply(null, line.map(e => e[1] + e[2]));
+            const lastShown = notes[notes.length - 1].start;
+            const signature = keyLetter(c.abc);
+            const alters = keyAlters(signature);
+
+            function gap(from, to) {
+                return spacer(to - from, from >= lineStart && to <= lastShown);
+            }
+
+            const bars = [];
+            let time = meterAt(c, lineStart);
+            for (let i = 0; i + 1 < c.bars.length; i++) {
+                const from = c.bars[i];
+                const to = c.bars[i + 1];
+                if (to <= lineStart || from >= lineEnd) continue;
+                const barTime = meterAt(c, from);
+                if (bars.length && barTime !== time) {
+                    bars[bars.length - 1] += ' [M:' + barTime + ']';
+                }
+                time = barTime;
+
+                const tokens = [];
+                const barAlters = {};
+                let at = from;
+                notes.forEach(function (n) {
+                    if (n.end <= from || n.start >= to) return;
+                    const s = Math.max(n.start, from);
+                    const e = Math.min(n.end, to);
+                    tokens.push(gap(at, s));
+                    // A note tied over from the last bar keeps its spelling
+                    // without restating the accidental.
+                    const accidental = n.start >= from ? abcAccidental(n.name, alters, barAlters) : '';
+                    tokens.push(tiedNote(accidental, abcPitch(n.name, currentVoice().clef), e - s, n.end > to));
+                    at = e;
+                });
+                tokens.push(gap(at, to));
+                bars.push(tokens.filter(Boolean).join(' ') + ' |');
+            }
+
+            // Spread evenly, so a phrase never ends on a one-bar stub of a line.
+            const lineCount = Math.ceil(bars.length / CONFIG.START_MAX_BARS_PER_LINE);
+            const lines = [];
+            for (let i = 0; i < lineCount; i++) {
+                const from = Math.floor(i * bars.length / lineCount);
+                const to = Math.floor((i + 1) * bars.length / lineCount);
+                lines.push(bars.slice(from, to).join(' '));
+            }
+            return [
+                'X:1',
+                'M:' + meterAt(c, lineStart),
+                'L:1/32',
+                'K:' + signature + ' clef=' + currentVoice().clef
+            ].concat(lines).join('\n');
+        }
+
+        function renderStart() {
+            const total = currentLine().length;
+            el.revealCount.textContent = session.revealed + ' / ' + total;
+            el.revealBtn.disabled = session.revealed >= total;
+            ABCJS.renderAbc(el.startNotation, startAbc(session.revealed), {
+                responsive: 'resize',
+                staffwidth: CONFIG.STAFF_WIDTH
+            });
+        }
+
+        function showStart() {
+            if (session.mass === null) return;
+            el.startTitle.textContent = 'Phrase ' + (parseInt(el.phraseSelect.value, 10) + 1)
+                + ' — ' + currentVoice().name;
+            el.start.hidden = false;
+            session.revealed = 1;
+            renderStart();
+        }
+
+        function revealNext() {
+            if (el.start.hidden || session.revealed >= currentLine().length) return;
+            session.revealed++;
+            renderStart();
+        }
+
+        function hideStart() {
+            el.start.hidden = true;
+            el.startNotation.innerHTML = '';
+        }
+
+        // ---- show ----
+
+        function hideScore() {
+            el.score.hidden = true;
+            el.notation.innerHTML = '';
+            el.showBtn.firstChild.textContent = 'Show ';
+        }
+
+        function showScore() {
+            if (session.mass === null) return;
+            const c = current();
+            el.scoreTitle.textContent = MASSES[session.mass].title + ' — '
+                + sectionLabel(c.file, c.title);
+            el.score.hidden = false;
+            el.showBtn.firstChild.textContent = 'Hide ';
+
+            ABCJS.renderAbc(el.notation, c.abc, {
+                add_classes: true,
+                responsive: 'resize',
+                staffwidth: CONFIG.STAFF_WIDTH
+            });
+
+            const phrase = currentPhrase();
+            const voice = parseInt(el.voiceSelect.value, 10);
+            const notes = el.notation.querySelectorAll('.abcjs-note.abcjs-v' + voice);
+            Array.from(notes).slice(phrase[2], phrase[2] + phrase[3]).forEach(function (node) {
+                node.classList.add('answer-voice');
+            });
+        }
+
+        function toggleScore() {
+            if (el.score.hidden) showScore();
+            else hideScore();
+        }
+
+        // ---- choosing ----
+
+        function clearOutput() {
+            stop();
+            hideScore();
+            hideStart();
+            el.firstNote.textContent = '';
+        }
+
+        function renderMasses() {
+            PALESTRINA_INDEX.masses.forEach(function (m) {
+                addOption(el.massSelect, m.id, m.title + ' (' + m.sections.length + ')');
+            });
+        }
+
+        // Many sections are titled only 'First Section' or 'alt Kyrie', so the
+        // movement is taken from the file name, e.g. 'Credo_04_c' -> 'Credo'.
+        function sectionLabel(file, title) {
+            const movement = file.split('_')[0];
+            return title.startsWith(movement) ? title : movement + ' — ' + title;
+        }
+
+        function renderSections(massId) {
+            el.sectionSelect.innerHTML = '';
+            MASSES[massId].sections.forEach(function (s, i) {
+                addOption(el.sectionSelect, i,
+                    (i + 1) + '. ' + sectionLabel(s[0], s[1]) + ' (' + s[2] + ' voices)');
+            });
+        }
+
+        function renderPhrases() {
+            const phrases = currentVoice().phrases;
+            el.phraseSelect.innerHTML = '';
+            phrases.forEach(function (p, i) {
+                addOption(el.phraseSelect, i, (i + 1) + ' of ' + phrases.length);
+            });
+        }
+
+        // Keeps the chosen voice where the new section has one in that place.
+        function renderVoices() {
+            const keep = parseInt(el.voiceSelect.value, 10) || 0;
+            el.voiceSelect.innerHTML = '';
+            current().voices.forEach(function (v, i) { addOption(el.voiceSelect, i, v.name); });
+            el.voiceSelect.value = keep < current().voices.length ? keep : 0;
+        }
+
+        function load(massId, sectionIdx) {
+            clearOutput();
+            const request = ++session.request;
+            el.massSelect.value = massId;
+            if (session.mass !== massId) renderSections(massId);
+            el.sectionSelect.value = sectionIdx;
+            ETUI.setText(el.status, 'Loading ' + MASSES[massId].title + '...');
+
+            fetchMass(massId).then(function () {
+                if (request !== session.request) return;   // a later choice won
+                session.mass = massId;
+                session.section = sectionIdx;
+                renderVoices();
+                renderPhrases();
+                const c = current();
+                el.info.textContent = sectionLabel(c.file, c.title) + ' · '
+                    + c.voices.length + ' voices · ' + c.time;
+                ETUI.setText(el.status, TiulPiano.isReady() ? 'Press Play.' : 'Loading piano samples...');
+            }).catch(function (e) {
+                ETUI.setText(el.status, 'Error: ' + e.message);
+            });
+        }
+
+        function loadRandom() {
+            const masses = PALESTRINA_INDEX.masses;
+            const mass = masses[Math.floor(Math.random() * masses.length)];
+            load(mass.id, Math.floor(Math.random() * mass.sections.length));
+        }
+
+        // The score stays hidden so a shown phrase can't give away the next one.
+        function changeLine() {
+            clearOutput();
+            ETUI.setText(el.status, 'Press Play.');
+        }
+
+        // ---- wiring ----
+
+        el.playBtn.addEventListener('click', play);
+        el.firstBtn.addEventListener('click', firstNote);
+        el.startBtn.addEventListener('click', showStart);
+        el.revealBtn.addEventListener('click', revealNext);
+        el.showBtn.addEventListener('click', toggleScore);
+        el.randomBtn.addEventListener('click', loadRandom);
+        el.massSelect.addEventListener('change', function () {
+            load(Number(el.massSelect.value), 0);
+        });
+        el.sectionSelect.addEventListener('change', function () {
+            load(Number(el.massSelect.value), Number(el.sectionSelect.value));
+        });
+        el.voiceSelect.addEventListener('change', function () {
+            renderPhrases();
+            changeLine();
+        });
+        el.phraseSelect.addEventListener('change', changeLine);
+        el.tempoSelect.addEventListener('change', stop);
+
+        ETUI.shortcuts({
+            P: play,
+            F: firstNote,
+            T: showStart,
+            R: revealNext,
+            S: toggleScore,
+            N: loadRandom
+        });
+
+        renderMasses();
+        load(PALESTRINA_INDEX.masses[0].id, 0);
+
+        ETUI.boot({
+            status: el.status,
+            enable: [el.playBtn, el.firstBtn],
+            keyboard: 'keyboard',
+            range: PALESTRINA_INDEX.range,
+            readyMessage: 'Ready! Press Play.'
+        });
+    })();
+</script>
+</body>
+</html>
